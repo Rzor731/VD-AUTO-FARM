@@ -572,7 +572,7 @@ AutoFarmGroup:AddToggle("EnableAutoFarm", {
 
 AutoFarmGroup:AddToggle("ServerHop", {
     Text = "Server Hop",
-    Tooltip = "Hop to 1-3 player servers as Spectator",
+    Tooltip = "Hop to 1-2 player servers as Spectator",
 
     Default = false,
 
