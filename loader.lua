@@ -6,21 +6,31 @@ local isfile = (type(isfile) == "function" and isfile) or (type(is_file) == "fun
 local readfile = (type(readfile) == "function" and readfile) or (type(read_file) == "function" and read_file) or function() return "" end
 local writefile = (type(writefile) == "function" and writefile) or (type(write_file) == "function" and write_file) or function() end
 
--- Helper Function: Safe Loadstring to prevent "attempt to call a nil value"
+local function getQueueOnTeleport()
+    if type(queue_on_teleport) == "function" then return queue_on_teleport end
+    if syn and type(syn.queue_on_teleport) == "function" then return syn.queue_on_teleport end
+    if type(queueonteleport) == "function" then return queueonteleport end
+    if fluxus and type(fluxus.queue_on_teleport) == "function" then return fluxus.queue_on_teleport end
+    return nil
+end
+
+-- Ultra Safe Loadstring to completely prevent "attempt to call a nil value"
 local function safeLoadstring(url)
     local success, content = pcall(function()
         return game:HttpGet(url)
     end)
     
-    if success and content and #content > 0 then
-        local func, err = loadstring(content)
-        if type(func) == "function" then
-            return func()
-        else
-            warn("[Load Error] Syntax error in script: " .. tostring(err))
+    if success and type(content) == "string" and #content > 0 then
+        local loadFunc = (type(loadstring) == "function" and loadstring) or (type(load_string) == "function" and load_string)
+        if loadFunc then
+            local compileOk, compiledFunc = pcall(loadFunc, content)
+            if compileOk and type(compiledFunc) == "function" then
+                local execOk, result = pcall(compiledFunc)
+                if execOk then
+                    return result
+                end
+            end
         end
-    else
-        warn("[HTTP Error] Failed to download script from: " .. tostring(url))
     end
     return nil
 end
@@ -35,13 +45,13 @@ local Library = safeLoadstring(repo .. "Library.lua")
 local ThemeManager = safeLoadstring(repo .. "addons/ThemeManager.lua")
 local SaveManager = safeLoadstring(repo .. "addons/SaveManager.lua")
 
-if not Library or not ThemeManager or not SaveManager then
-    warn("[Fatal Error] UI Library or Addons failed to load!")
+if not Library or type(Library) ~= "table" then
+    warn("[Fatal Error] UI Library failed to load!")
     return
 end
 
-local Options = Library.Options
-local Toggles = Library.Toggles
+local Options = Library.Options or {}
+local Toggles = Library.Toggles or {}
 
 Library.ForceCheckbox = false
 Library.ShowToggleFrameInKeybinds = true
@@ -52,14 +62,15 @@ Library.ShowToggleFrameInKeybinds = true
 
 local Window = Library:CreateWindow({
     Title = "",
-    Footer = "version: 1.0.2",
+    Footer = "version: 1.0.3",
     Icon = "bot",
-
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
 
-Window:SetSidebarWidth(40)
+if Window and Window.SetSidebarWidth then
+    pcall(function() Window:SetSidebarWidth(40) end)
+end
 
 local Tabs = {
     AutoFarm = Window:AddTab("", "zap"),
@@ -84,39 +95,24 @@ local BeatState = {
 
 local function GetRole()
     local player = game:GetService("Players").LocalPlayer
-
-    if not player.Team then
-        return "Unknown"
-    end
+    if not player or not player.Team then return "Unknown" end
 
     local name = player.Team.Name
-
-    if name == "Killer" then
-        return "Killer"
-    end
-
-    if name == "Survivors" then
-        return "Survivor"
-    end
-
-    if name == "Spectator" or name == "Spectators" then
-        return "Spectator"
-    end
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" or name == "Survivor" then return "Survivor" end
+    if name == "Spectator" or name == "Spectators" then return "Spectator" end
 
     return "Lobby"
 end
 
 local function GetCharacterRoot()
     local player = game:GetService("Players").LocalPlayer
-    local character = player.Character
-
+    local character = player and player.Character
     return character and character:FindFirstChild("HumanoidRootPart")
 end
 
--- Universal HTTP Request Fallback with Safe pcall
 local function safeRequest(options)
     local req = nil
-    
     pcall(function()
         req = (syn and syn.request) 
            or (http and http.request) 
@@ -132,7 +128,6 @@ local function safeRequest(options)
     return nil
 end
 
--- Detect Executor Name Safely
 local function GetExecutorName()
     local name = "Unknown Executor"
     pcall(function()
@@ -155,7 +150,6 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     end
 
     local webhookUrl = Options.WebhookLink and Options.WebhookLink.Value or ""
-
     if not webhookUrl or webhookUrl == "" or not string.find(webhookUrl, "discord.com/api/webhooks") then
         return false, "Invalid Webhook URL"
     end
@@ -170,9 +164,9 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
         gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
     end)
 
-    local username = LocalPlayer.Name
-    local displayName = LocalPlayer.DisplayName
-    local userId = LocalPlayer.UserId
+    local username = LocalPlayer and LocalPlayer.Name or "Unknown"
+    local displayName = LocalPlayer and LocalPlayer.DisplayName or "Unknown"
+    local userId = LocalPlayer and LocalPlayer.UserId or 0
     local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
     local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
     local executorName = GetExecutorName()
@@ -187,9 +181,7 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
             ["description"] = customDesc or "Notification trigger from **VD Auto Farm Loader**.",
             ["color"] = 5793266,
             ["timestamp"] = timestamp,
-            ["thumbnail"] = {
-                ["url"] = avatarUrl
-            },
+            ["thumbnail"] = { ["url"] = avatarUrl },
             ["fields"] = {
                 {
                     ["name"] = "👤 Player Info",
@@ -222,9 +214,7 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     local response = safeRequest({
         Url = webhookUrl,
         Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
+        Headers = { ["Content-Type"] = "application/json" },
         Body = HttpService:JSONEncode(payload)
     })
 
@@ -241,15 +231,13 @@ end
 --==================================================
 
 local function BeatGameSurvivor()
-    if not Toggles.EnableAutoFarm.Value then
+    if not Toggles.EnableAutoFarm or not Toggles.EnableAutoFarm.Value then
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
         return
     end
 
-    if GetRole() ~= "Survivor" then
-        return
-    end
+    if GetRole() ~= "Survivor" then return end
 
     local root = GetCharacterRoot()
     if not root then return end
@@ -362,7 +350,7 @@ local function GetIgnoredServers()
 
     pcall(function()
         local content = readfile(IGNORE_FILE)
-        if content then
+        if type(content) == "string" and #content > 0 then
             for _, line in ipairs(content:split("\n")) do
                 local serverId, timestamp = line:match("([^|]+)|?(%d*)")
                 timestamp = tonumber(timestamp) or 0
@@ -388,44 +376,59 @@ end
 
 IgnoredServers = GetIgnoredServers()
 
--- TELEPORT FAIL HANDLER
-TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
-    if player == Players.LocalPlayer then
-        isHopping = false
+pcall(function()
+    TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+        if player == Players.LocalPlayer then
+            isHopping = false
 
-        Library:Notify({
-            Title = "Teleport Failed",
-            Description = "Server full or ended. Retrying in 2s...",
-            Icon = "x",
-            Time = 4,
-        })
+            if Library and Library.Notify then
+                pcall(function()
+                    Library:Notify({
+                        Title = "Teleport Failed",
+                        Description = "Server full or ended. Retrying in 2s...",
+                        Icon = "x",
+                        Time = 4,
+                    })
+                end)
+            end
 
-        task.wait(2)
+            task.wait(2)
 
-        if Toggles.ServerHop and Toggles.ServerHop.Value and not Library.Unloaded do
-            task.spawn(function()
-                ServerHop()
+            if Toggles.ServerHop and Toggles.ServerHop.Value and not Library.Unloaded do
+                task.spawn(function()
+                    ServerHop()
+                end)
+            end
+        end
+    end)
+end)
+
+-- SAFE SERVER HOP DETECTORS
+local IsRound = false
+
+pcall(function()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
+    if Remotes then
+        local StatusUpdateEvent = Remotes:FindFirstChild("StatusUpdateEvent")
+        local TimeUpdateEvent = Remotes:FindFirstChild("TimeUpdateEvent")
+
+        if StatusUpdateEvent and StatusUpdateEvent:IsA("RemoteEvent") then
+            StatusUpdateEvent.OnClientEvent:Connect(function(Status)
+                if Status == "WaitingForPlayers" or Status == "IntermissionStarting" or Status == "Intermission" then
+                    IsRound = false
+                end
             end)
         end
-    end
-end)
 
--- SERVER HOP DETECTORS
-local IsRound = false
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local StatusUpdateEvent = Remotes:WaitForChild("StatusUpdateEvent")
-local TimeUpdateEvent = Remotes:WaitForChild("TimeUpdateEvent")
-
-StatusUpdateEvent.OnClientEvent:Connect(function(Status)
-    if Status == "WaitingForPlayers" or Status == "IntermissionStarting" or Status == "Intermission" then
-        IsRound = false
-    end
-end)
-
-TimeUpdateEvent.OnClientEvent:Connect(function(Status)
-    if Status == "Round" then
-        IsRound = true
+        if TimeUpdateEvent and TimeUpdateEvent:IsA("RemoteEvent") then
+            TimeUpdateEvent.OnClientEvent:Connect(function(Status)
+                if Status == "Round" then
+                    IsRound = true
+                end
+            end)
+        end
     end
 end)
 
@@ -442,7 +445,7 @@ local function ServerHop()
 
     local cursor = ""
 
-    while Toggles.ServerHop.Value and not Library.Unloaded do
+    while Toggles.ServerHop and Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
             isHopping = false
             task.wait(0.5)
@@ -553,44 +556,50 @@ local AutoExecuteQueued = false
 
 local function QueueAutoExecute()
     if AutoExecuteQueued then return end
-    if not Toggles.AutoExecute.Value then return end
+    if not Toggles.AutoExecute or not Toggles.AutoExecute.Value then return end
 
-    if type(queue_on_teleport) ~= "function" then
-        Library:Notify({
-            Title = "Auto Execute",
-            Description = "queue_on_teleport is not available.",
-            Time = 5,
-        })
+    local qtp = getQueueOnTeleport()
+    if type(qtp) ~= "function" then
+        if Library and Library.Notify then
+            pcall(function()
+                Library:Notify({
+                    Title = "Auto Execute",
+                    Description = "queue_on_teleport is not available on this executor.",
+                    Time = 5,
+                })
+            end)
+        end
         return
     end
 
     local queued = string.format([[
         pcall(function()
             local str = game:HttpGet(%q)
-            local func = loadstring(str)
-            if type(func) == "function" then
-                func()
+            local loadFunc = (type(loadstring) == "function" and loadstring) or (type(load_string) == "function" and load_string)
+            if loadFunc then
+                local func = loadFunc(str)
+                if type(func) == "function" then
+                    func()
+                end
             end
         end)
     ]], LOADER_URL)
 
     local success, err = pcall(function()
-        queue_on_teleport(queued)
+        qtp(queued)
     end)
 
     if success then
         AutoExecuteQueued = true
-        Library:Notify({
-            Title = "Auto Execute",
-            Description = "Script queued for next teleport.",
-            Time = 3,
-        })
-    else
-        Library:Notify({
-            Title = "Auto Execute",
-            Description = "Failed to queue script: " .. tostring(err),
-            Time = 5,
-        })
+        if Library and Library.Notify then
+            pcall(function()
+                Library:Notify({
+                    Title = "Auto Execute",
+                    Description = "Script queued for next teleport.",
+                    Time = 3,
+                })
+            end)
+        end
     end
 end
 
@@ -629,20 +638,24 @@ WebhookGroup:AddInput("WebhookLink", {
 WebhookGroup:AddButton("Test Webhook", function()
     local ok, msg = SendDiscordWebhook("🔔 Webhook Test", "Webhook configuration test from **VD Auto Farm** UI!", true)
     
-    if ok then
-        Library:Notify({
-            Title = "Webhook Success",
-            Description = "Test message sent to Discord!",
-            Icon = "check",
-            Time = 4,
-        })
-    else
-        Library:Notify({
-            Title = "Webhook Failed",
-            Description = msg,
-            Icon = "x",
-            Time = 5,
-        })
+    if Library and Library.Notify then
+        pcall(function()
+            if ok then
+                Library:Notify({
+                    Title = "Webhook Success",
+                    Description = "Test message sent to Discord!",
+                    Icon = "check",
+                    Time = 4,
+                })
+            else
+                Library:Notify({
+                    Title = "Webhook Failed",
+                    Description = msg,
+                    Icon = "x",
+                    Time = 5,
+                })
+            end
+        end)
     end
 end)
 
@@ -653,16 +666,18 @@ end)
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", {
-    Default = Library.KeybindFrame.Visible,
+    Default = Library.KeybindFrame and Library.KeybindFrame.Visible or false,
     Text = "Open Keybind Menu",
     Callback = function(Value)
-        Library.KeybindFrame.Visible = Value
+        if Library.KeybindFrame then
+            Library.KeybindFrame.Visible = Value
+        end
     end,
 })
 
 MenuGroup:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
-    Default = Library.ShowCustomCursor,
+    Default = Library.ShowCustomCursor or false,
     Callback = function(Value)
         Library.ShowCustomCursor = Value
     end,
@@ -673,7 +688,9 @@ MenuGroup:AddDropdown("NotificationSide", {
     Default = "Right",
     Text = "Notification Side",
     Callback = function(Value)
-        Library:SetNotifySide(Value)
+        if Library.SetNotifySide then
+            pcall(function() Library:SetNotifySide(Value) end)
+        end
     end,
 })
 
@@ -683,20 +700,22 @@ MenuGroup:AddDropdown("DPIDropdown", {
     Text = "DPI Scale",
     Callback = function(Value)
         local DPI = tonumber(Value:gsub("%%", ""))
-        if DPI then
-            Library:SetDPIScale(DPI)
+        if DPI and Library.SetDPIScale then
+            pcall(function() Library:SetDPIScale(DPI) end)
         end
     end,
 })
 
 MenuGroup:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
-    Default = Library.CornerRadius,
+    Default = Library.CornerRadius or 0,
     Min = 0,
     Max = 20,
     Rounding = 0,
     Callback = function(Value)
-        Window:SetCornerRadius(Value)
+        if Window and Window.SetCornerRadius then
+            pcall(function() Window:SetCornerRadius(Value) end)
+        end
     end,
 })
 
@@ -710,25 +729,31 @@ MenuGroup:AddLabel("Menu bind")
     })
 
 MenuGroup:AddButton("Unload", function()
-    Library:Unload()
+    pcall(function() Library:Unload() end)
 end)
 
-Library.ToggleKeybind = Options.MenuKeybind
+if Options and Options.MenuKeybind then
+    Library.ToggleKeybind = Options.MenuKeybind
+end
 
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
+if ThemeManager and SaveManager then
+    pcall(function()
+        ThemeManager:SetLibrary(Library)
+        SaveManager:SetLibrary(Library)
 
-ThemeManager:SetFolder("AutoFarm")
-SaveManager:SetFolder("AutoFarm")
-SaveManager:SetSubFolder("Settings")
+        ThemeManager:SetFolder("AutoFarm")
+        SaveManager:SetFolder("AutoFarm")
+        SaveManager:SetSubFolder("Settings")
 
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+        SaveManager:IgnoreThemeSettings()
+        SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 
-SaveManager:BuildConfigSection(Tabs.Settings)
-ThemeManager:ApplyToTab(Tabs.Settings)
+        SaveManager:BuildConfigSection(Tabs.Settings)
+        ThemeManager:ApplyToTab(Tabs.Settings)
 
-SaveManager:LoadAutoloadConfig()
+        SaveManager:LoadAutoloadConfig()
+    end)
+end
 
 --==================================================
 -- INITIALIZE & MAIN LOOP
@@ -742,7 +767,7 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while not Library.Unloaded do
+    while Library and not Library.Unloaded do
         pcall(function()
             BeatGameSurvivor()
         end)
