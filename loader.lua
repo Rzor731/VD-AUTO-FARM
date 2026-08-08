@@ -608,7 +608,7 @@ local function QueueAutoExecute()
 
     if type(queue_on_teleport) ~= "function" then
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "queue_on_teleport is not available.",
             Time = 5,
         })
@@ -628,13 +628,13 @@ loadstring(game:HttpGet(%q))()
         AutoExecuteQueued = true
 
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "Script queued for the next teleport.",
             Time = 3,
         })
     else
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "Failed to queue script: " .. tostring(err),
             Time = 5,
         })
