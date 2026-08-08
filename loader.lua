@@ -85,66 +85,11 @@ local NotificationState = {
 --==================================================
 
 local function Notify(Title, Description, Time)
-    local Notification = Library:Notify({
+    Library:Notify({
         Title = Title,
         Description = Description,
         Time = Time or 4,
     })
-
-    task.defer(function()
-        task.wait()
-
-        pcall(function()
-            local Root =
-                Notification
-                or Library.Notifications[#Library.Notifications]
-
-            if not Root then
-                return
-            end
-
-            -- Cari container yang berisi Title + Description
-            for _, Object in ipairs(Root:GetDescendants()) do
-
-                if Object:IsA("Frame") then
-
-                    local TitleFound = false
-                    local DescriptionFound = false
-                    local Layout
-
-                    for _, Child in ipairs(Object:GetChildren()) do
-
-                        if Child:IsA("TextLabel") then
-
-                            if Child.Text == Title then
-                                TitleFound = true
-
-                            elseif Child.Text == Description then
-                                DescriptionFound = true
-                            end
-
-                        elseif Child:IsA("UIListLayout") then
-                            Layout = Child
-                        end
-
-                    end
-
-                    -- Ini container Title + Description
-                    if TitleFound
-                        and DescriptionFound
-                        and Layout then
-
-                        Layout.Padding =
-                            UDim.new(0, 8)
-
-                        break
-                    end
-                end
-            end
-        end)
-    end)
-
-    return Notification
 end
 
 --==================================================
