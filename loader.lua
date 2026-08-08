@@ -85,11 +85,40 @@ local NotificationState = {
 --==================================================
 
 local function Notify(Title, Description, Time)
-    Library:Notify({
+    local Notification = Library:Notify({
         Title = Title,
         Description = Description,
         Time = Time or 4,
     })
+
+    task.defer(function()
+        pcall(function()
+            local Root =
+                Notification
+                or Library.Notifications[#Library.Notifications]
+
+            if not Root then
+                return
+            end
+
+            for _, Object in ipairs(Root:GetDescendants()) do
+
+                if Object:IsA("UIListLayout") then
+                    Object.Padding = UDim.new(0, 6)
+                end
+
+                if Object:IsA("UIPadding") then
+                    Object.PaddingTop = UDim.new(0, 8)
+                    Object.PaddingBottom = UDim.new(0, 8)
+                    Object.PaddingLeft = UDim.new(0, 10)
+                    Object.PaddingRight = UDim.new(0, 10)
+                end
+
+            end
+        end)
+    end)
+
+    return Notification
 end
 
 --==================================================
