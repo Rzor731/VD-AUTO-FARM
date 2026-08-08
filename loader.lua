@@ -92,6 +92,8 @@ local function Notify(Title, Description, Time)
     })
 
     task.defer(function()
+        task.wait()
+
         pcall(function()
             local Root =
                 Notification
@@ -101,18 +103,31 @@ local function Notify(Title, Description, Time)
                 return
             end
 
+            local TitleLabel
+            local DescriptionLabel
+
             for _, Object in ipairs(Root:GetDescendants()) do
+                if Object:IsA("TextLabel") then
+                    local Text = Object.Text
 
-                if Object:IsA("UIListLayout") then
-                    Object.Padding = UDim.new(0, 6)
+                    if Text == Title then
+                        TitleLabel = Object
+                    elseif Text == Description then
+                        DescriptionLabel = Object
+                    end
                 end
+            end
 
-                if Object:IsA("UIPadding") then
-                    Object.PaddingTop = UDim.new(0, 8)
-                    Object.PaddingBottom = UDim.new(0, 8)
-                    Object.PaddingLeft = UDim.new(0, 10)
-                    Object.PaddingRight = UDim.new(0, 10)
-                end
+            if TitleLabel and DescriptionLabel then
+
+                -- Geser description ke bawah
+                DescriptionLabel.Position =
+                    UDim2.new(
+                        DescriptionLabel.Position.X.Scale,
+                        DescriptionLabel.Position.X.Offset,
+                        DescriptionLabel.Position.Y.Scale,
+                        DescriptionLabel.Position.Y.Offset + 6
+                    )
 
             end
         end)
