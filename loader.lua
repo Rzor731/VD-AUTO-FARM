@@ -592,11 +592,68 @@ AutoFarmGroup:AddToggle("ServerHop", {
 -- AUTO EXECUTE
 --==================================================
 
+local LOADER_URL =
+    "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
+
+local AutoExecuteQueued = false
+
+local function QueueAutoExecute()
+    if AutoExecuteQueued then
+        return
+    end
+
+    if not Toggles.AutoExecute.Value then
+        return
+    end
+
+    if type(queue_on_teleport) ~= "function" then
+        Library:Notify({
+            Title = "Auto Execute",
+            Description = "queue_on_teleport is not available.",
+            Time = 5,
+        })
+
+        return
+    end
+
+    local queued = string.format([[
+loadstring(game:HttpGet(%q))()
+]], LOADER_URL)
+
+    local success, err = pcall(function()
+        queue_on_teleport(queued)
+    end)
+
+    if success then
+        AutoExecuteQueued = true
+
+        Library:Notify({
+            Title = "Auto Execute",
+            Description = "Script queued for the next teleport.",
+            Time = 3,
+        })
+    else
+        Library:Notify({
+            Title = "Auto Execute",
+            Description = "Failed to queue script: " .. tostring(err),
+            Time = 5,
+        })
+    end
+end
+
 AutoFarmGroup:AddToggle("AutoExecute", {
     Text = "Auto Execute",
-    Tooltip = "Automatically execute the script",
+    Tooltip = "Automatically execute the script after server hop",
 
     Default = false,
+
+    Callback = function(Value)
+        if Value then
+            QueueAutoExecute()
+        else
+            AutoExecuteQueued = false
+        end
+    end,
 })
 
 --==================================================
@@ -813,6 +870,12 @@ SaveManager:BuildConfigSection(Tabs.Settings)
 ThemeManager:ApplyToTab(Tabs.Settings)
 
 SaveManager:LoadAutoloadConfig()
+
+--==================================================
+-- INITIALIZE AUTO EXECUTE
+--==================================================
+
+QueueAutoExecute()
 
 --==================================================
 -- MAIN LOOP
