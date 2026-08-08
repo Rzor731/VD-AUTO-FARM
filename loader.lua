@@ -400,7 +400,7 @@ local function BeatGameSurvivor()
         NotificationState.MapDetected = true
 
         Notify(
-            "Auto Farm",
+            "Auto Farm\n",
             "Map detected • "
                 .. (detectedMap or "Unknown"),
             3
@@ -876,7 +876,7 @@ AutoFarmGroup:AddToggle(
             if Value then
 
                 Notify(
-                    "Auto Farm",
+                    "Auto Farm\n",
                     "Enabled.",
                     3
                 )
@@ -884,8 +884,8 @@ AutoFarmGroup:AddToggle(
             else
 
                 Notify(
-                    "Auto Farm",
-                    "Disabled.",
+                    "Auto Farm\n",
+                    "Disabled.     ",
                     3
                 )
 
