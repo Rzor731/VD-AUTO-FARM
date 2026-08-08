@@ -90,6 +90,123 @@ local function GetCharacterRoot()
     return character and character:FindFirstChild("HumanoidRootPart")
 end
 
+-- Universal HTTP Request Fallback for All Modern Executors
+local function safeRequest(options)
+    local req = (syn and syn.request) 
+             or (http and http.request) 
+             or http_request 
+             or request 
+             or (fluxus and fluxus.request)
+             or (krnl and krnl.request)
+
+    if req then
+        return req(options)
+    end
+    return nil
+end
+
+-- Detect Executor Name
+local function GetExecutorName()
+    return (identifyexecutor and identifyexecutor())
+        or (getexecutorname and getexecutorname())
+        or "Unknown Executor"
+end
+
+--==================================================
+-- WEBHOOK SYSTEM
+--==================================================
+
+local function SendDiscordWebhook(customTitle, customDesc, forceSend)
+    -- Check if Webhook is enabled unless forceSend (Test Button) is true
+    if not forceSend and (not Toggles.EnableWebhook or not Toggles.EnableWebhook.Value) then
+        return false, "Webhook Disabled"
+    end
+
+    local webhookUrl = Options.WebhookLink and Options.WebhookLink.Value or ""
+
+    if not webhookUrl or webhookUrl == "" or not string.find(webhookUrl, "discord.com/api/webhooks") then
+        return false, "Invalid Webhook URL"
+    end
+
+    local HttpService = game:GetService("HttpService")
+    local Players = game:GetService("Players")
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local LocalPlayer = Players.LocalPlayer
+
+    -- Fetch Game Name
+    local gameName = "Unknown Game"
+    pcall(function()
+        gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+    end)
+
+    -- Player Details
+    local username = LocalPlayer.Name
+    local displayName = LocalPlayer.DisplayName
+    local userId = LocalPlayer.UserId
+    local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
+    local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
+    local executorName = GetExecutorName()
+    local currentRole = GetRole()
+    local timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+
+    -- Payload Data
+    local payload = {
+        ["username"] = "VD Auto Farm Logger",
+        ["avatar_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
+        ["embeds"] = {{
+            ["title"] = customTitle or "🚀 VD Auto Farm Notification",
+            ["description"] = customDesc or "Notification trigger from **VD Auto Farm Loader**.",
+            ["color"] = 5793266, -- Discord Blurple (#5865F2)
+            ["timestamp"] = timestamp,
+            ["thumbnail"] = {
+                ["url"] = avatarUrl
+            },
+            ["fields"] = {
+                {
+                    ["name"] = "👤 Player Info",
+                    ["value"] = string.format("**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`", displayName, username, profileUrl, userId),
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "⚡ Executor",
+                    ["value"] = string.format("`%s`", executorName),
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "🎮 Game Details",
+                    ["value"] = string.format("**Game:** %s\n**Place ID:** `%d`\n**Role:** `%s`", gameName, game.PlaceId, currentRole),
+                    ["inline"] = false
+                },
+                {
+                    ["name"] = "📌 Server Job ID",
+                    ["value"] = string.format("```lua\n%s\n```", (game.JobId ~= "" and game.JobId or "Singleplayer / Local")),
+                    ["inline"] = false
+                }
+            },
+            ["footer"] = {
+                ["text"] = "VD Auto Farm System",
+                ["icon_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png"
+            }
+        }}
+    }
+
+    local response = safeRequest({
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = HttpService:JSONEncode(payload)
+    })
+
+    if response and (response.StatusCode == 200 or response.StatusCode == 204) then
+        return true, "Webhook successfully sent!"
+    else
+        local status = response and response.StatusCode or "No Response / Failed Request"
+        return false, "Failed Status: " .. tostring(status)
+    end
+end
+
 --==================================================
 -- BEAT GAME SURVIVOR
 --==================================================
@@ -311,11 +428,14 @@ local function BeatGameSurvivor()
     )
 
     --==================================================
-    -- SAVE STATE
+    -- SAVE STATE & WEBHOOK NOTIFY
     --==================================================
 
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
+
+    -- Send notification to webhook upon finishing
+    SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
 end
 
 --==================================================
@@ -526,6 +646,9 @@ local function ServerHop()
                     IgnoredServers
                 )
 
+                -- Send Server Hop notification via Webhook
+                SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
+
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
                     Server.id,
@@ -657,7 +780,7 @@ AutoFarmGroup:AddToggle("AutoExecute", {
 })
 
 --==================================================
--- WEBHOOK
+-- WEBHOOK GROUPBOX SETUP
 --==================================================
 
 WebhookGroup:AddToggle("EnableWebhook", {
@@ -677,6 +800,30 @@ WebhookGroup:AddInput("WebhookLink", {
     Finished = false,
     ClearTextOnFocus = false,
 })
+
+WebhookGroup:AddButton("Test Webhook", function()
+    local ok, msg = SendDiscordWebhook("🔔 Webhook Test", "Webhook configuration test from **VD Auto Farm** UI!", true)
+    
+    if ok then
+        Library:Notify({
+            Title = "Webhook Success",
+            Description = "Test message sent to Discord!",
+            Icon = "check",
+            Time = 4,
+        })
+    else
+        Library:Notify({
+            Title = "Webhook Failed",
+            Description = msg,
+            Icon = "x",
+            Time = 5,
+        })
+    end
+end)
+
+--==================================================
+-- TEST NOTIFICATIONS
+--==================================================
 
 local TestNotificationGroup =
     Tabs.AutoFarm:AddRightGroupbox("Test Notifications", "bell")
@@ -872,10 +1019,16 @@ ThemeManager:ApplyToTab(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
 --==================================================
--- INITIALIZE AUTO EXECUTE
+-- INITIALIZE AUTO EXECUTE & EXECUTION NOTIFY
 --==================================================
 
 QueueAutoExecute()
+
+-- Send execution log if webhook is enabled on load
+task.spawn(function()
+    task.wait(2) -- Wait for UI Config to auto load
+    SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
+end)
 
 --==================================================
 -- MAIN LOOP
