@@ -449,6 +449,16 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+    if player == Players.LocalPlayer then
+        Library:Notify({
+            Title = "Teleport Failed",
+            Description = "Server penuh/tutup. Mencari server lain...",
+            Time = 3,
+        })
+    end
+end)
+
 local IgnoredServers = {}
 
 local function GetIgnoredServers()
@@ -631,13 +641,14 @@ local function ServerHop()
             end
 
             if
-                Server.id
-                and Server.id ~= game.JobId
-                and Server.playing
-                and Server.playing >= 1
-                and Server.playing <= 2
-                and not IgnoredServers[Server.id]
-            then
+			    Server.id
+			    and Server.id ~= game.JobId
+			    and Server.playing
+			    and Server.playing >= 1
+			    and Server.maxPlayers
+			    and Server.playing < Server.maxPlayers -- Pastikan slot server belum penuh
+			    and not IgnoredServers[Server.id]
+			then
 
                 -- Mark server before teleport
                 IgnoredServers[Server.id] = os.time()
@@ -649,11 +660,13 @@ local function ServerHop()
                 -- Send Server Hop notification via Webhook
                 SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
 
-                TeleportService:TeleportToPlaceInstance(
-                    game.PlaceId,
-                    Server.id,
-                    Players.LocalPlayer
-                )
+                pcall(function()
+				    TeleportService:TeleportToPlaceInstance(
+				        game.PlaceId,
+				        Server.id,
+				        Players.LocalPlayer
+				    )
+				end)
 
                 return
             end
