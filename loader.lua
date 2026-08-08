@@ -27,6 +27,12 @@ local Window = Library:CreateWindow({
     ShowCustomCursor = true,
 })
 
+Library:Notify({
+    Title = "Server Hop",
+    Description = "Server Hop is ready!",
+    Time = 5,
+})
+
 --==================================================
 -- TABS
 --==================================================
