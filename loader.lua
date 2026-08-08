@@ -42,8 +42,11 @@ local Tabs = {
 -- AUTO FARM TAB
 --==================================================
 
-local AutoFarmGroup = Tabs.AutoFarm:AddLeftGroupbox("Auto Farm", "zap")
-local WebhookGroup = Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
+local AutoFarmGroup =
+    Tabs.AutoFarm:AddLeftGroupbox("Auto Farm", "zap")
+
+local WebhookGroup =
+    Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
 
 --==================================================
 -- BEAT SURVIVOR STATE
@@ -55,11 +58,70 @@ local BeatState = {
 }
 
 --==================================================
+-- NOTIFICATION STATE
+--==================================================
+
+local NotificationState = {
+    RoundNotificationShown = false,
+
+    CurrentRoundRole = nil,
+
+    LastRole = nil,
+
+    MapDetected = false,
+    FinishDetected = false,
+    EscapeCompleted = false,
+
+    SearchStarted = false,
+
+    LastServer = nil,
+
+    RequestErrorShown = false,
+    NoServerShown = false,
+}
+
+--==================================================
+-- NOTIFICATION HELPER
+--==================================================
+
+local function Notify(Title, Description, Time)
+    Library:Notify({
+        Title = Title,
+        Description = Description,
+        Time = Time or 4,
+    })
+end
+
+--==================================================
+-- RESET ROUND NOTIFICATION STATE
+--==================================================
+
+local function ResetRoundNotificationState()
+    NotificationState.RoundNotificationShown = false
+    NotificationState.CurrentRoundRole = nil
+
+    NotificationState.LastRole = nil
+
+    NotificationState.MapDetected = false
+    NotificationState.FinishDetected = false
+    NotificationState.EscapeCompleted = false
+
+    NotificationState.SearchStarted = false
+
+    NotificationState.LastServer = nil
+
+    NotificationState.RequestErrorShown = false
+    NotificationState.NoServerShown = false
+end
+
+--==================================================
 -- HELPER FUNCTIONS
 --==================================================
 
 local function GetRole()
-    local player = game:GetService("Players").LocalPlayer
+
+    local player =
+        game:GetService("Players").LocalPlayer
 
     if not player.Team then
         return "Unknown"
@@ -75,8 +137,9 @@ local function GetRole()
         return "Survivor"
     end
 
-    -- Support both possible spectator team names
-    if name == "Spectator" or name == "Spectators" then
+    if name == "Spectator"
+        or name == "Spectators" then
+
         return "Spectator"
     end
 
@@ -84,10 +147,15 @@ local function GetRole()
 end
 
 local function GetCharacterRoot()
-    local player = game:GetService("Players").LocalPlayer
-    local character = player.Character
 
-    return character and character:FindFirstChild("HumanoidRootPart")
+    local player =
+        game:GetService("Players").LocalPlayer
+
+    local character =
+        player.Character
+
+    return character
+        and character:FindFirstChild("HumanoidRootPart")
 end
 
 --==================================================
@@ -96,14 +164,22 @@ end
 
 local function BeatGameSurvivor()
 
-    -- Feature disabled
+    --==================================================
+    -- FEATURE DISABLED
+    --==================================================
+
     if not Toggles.EnableAutoFarm.Value then
+
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
+
         return
     end
 
-    -- Only Survivor
+    --==================================================
+    -- ONLY SURVIVOR
+    --==================================================
+
     if GetRole() ~= "Survivor" then
         return
     end
@@ -114,19 +190,27 @@ local function BeatGameSurvivor()
         return
     end
 
-    local Workspace = game:GetService("Workspace")
-    local map = Workspace:FindFirstChild("Map")
+    local Workspace =
+        game:GetService("Workspace")
+
+    local map =
+        Workspace:FindFirstChild("Map")
 
     if not map then
         return
     end
 
     local exitPos = nil
+    local detectedMap = nil
+
+    --==================================================
+    -- MAP DETECTION
+    --==================================================
 
     pcall(function()
 
         --==================================================
-        -- MAP DETECTOR #1
+        -- MAP #1
         -- Rooftop
         --==================================================
 
@@ -139,11 +223,13 @@ local function BeatGameSurvivor()
                 -4918.74
             )
 
+            detectedMap = "Rooftop"
+
             return
         end
 
         --==================================================
-        -- MAP DETECTOR #2
+        -- MAP #2
         -- HooksMeat
         --==================================================
 
@@ -155,11 +241,13 @@ local function BeatGameSurvivor()
                 -796.72
             )
 
+            detectedMap = "HooksMeat"
+
             return
         end
 
         --==================================================
-        -- MAP DETECTOR #3
+        -- MAP #3
         -- Churchbell
         --==================================================
 
@@ -171,11 +259,13 @@ local function BeatGameSurvivor()
                 -78.48
             )
 
+            detectedMap = "Churchbell"
+
             return
         end
 
         --==================================================
-        -- MAP DETECTOR #4
+        -- MAP #4
         -- Finishline
         --==================================================
 
@@ -200,11 +290,15 @@ local function BeatGameSurvivor()
                 end
             end
 
+            if exitPos then
+                detectedMap = "Finishline"
+            end
+
             return
         end
 
         --==================================================
-        -- MAP DETECTOR #5
+        -- MAP #5
         -- Any descendant containing "finish"
         --==================================================
 
@@ -215,6 +309,7 @@ local function BeatGameSurvivor()
                 if obj:IsA("BasePart") then
 
                     exitPos = obj.Position
+
                     break
 
                 elseif obj:IsA("Model") then
@@ -223,15 +318,21 @@ local function BeatGameSurvivor()
                         obj:FindFirstChildWhichIsA("BasePart")
 
                     if part then
+
                         exitPos = part.Position
+
                         break
                     end
                 end
             end
         end
 
+        if exitPos then
+            detectedMap = "Finishline"
+        end
+
         --==================================================
-        -- MAP DETECTOR #6
+        -- MAP #6
         -- Limestone fallback
         --==================================================
 
@@ -248,13 +349,15 @@ local function BeatGameSurvivor()
                         -7579.52
                     )
 
+                    detectedMap = "Limestone"
+
                     break
                 end
             end
         end
 
         --==================================================
-        -- MAP DETECTOR #7
+        -- MAP #7
         -- Leather fallback
         --==================================================
 
@@ -271,6 +374,8 @@ local function BeatGameSurvivor()
                         -796.72
                     )
 
+                    detectedMap = "Leather"
+
                     break
                 end
             end
@@ -278,9 +383,28 @@ local function BeatGameSurvivor()
 
     end)
 
-    -- No exit detected
+    --==================================================
+    -- NO EXIT DETECTED
+    --==================================================
+
     if not exitPos then
         return
+    end
+
+    --==================================================
+    -- MAP DETECTED NOTIFICATION
+    --==================================================
+
+    if not NotificationState.MapDetected then
+
+        NotificationState.MapDetected = true
+
+        Notify(
+            "Auto Farm",
+            "Map detected • "
+                .. (detectedMap or "Unknown"),
+            3
+        )
     end
 
     --==================================================
@@ -293,22 +417,44 @@ local function BeatGameSurvivor()
             (exitPos - BeatState.LastFinishPos).Magnitude
 
         if dist > 50 then
+
             BeatState.BeatSurvivorDone = false
+
+            NotificationState.FinishDetected = false
         end
     end
 
-    -- Already completed this location
+    --==================================================
+    -- ALREADY COMPLETED
+    --==================================================
+
     if BeatState.BeatSurvivorDone then
         return
+    end
+
+    --==================================================
+    -- FINISH DETECTED
+    --==================================================
+
+    if not NotificationState.FinishDetected then
+
+        NotificationState.FinishDetected = true
+
+        Notify(
+            "Auto Farm",
+            "Finish detected • Teleporting...",
+            4
+        )
     end
 
     --==================================================
     -- TELEPORT TO FINISH
     --==================================================
 
-    root.CFrame = CFrame.new(
-        exitPos + Vector3.new(0, 3, 0)
-    )
+    root.CFrame =
+        CFrame.new(
+            exitPos + Vector3.new(0, 3, 0)
+        )
 
     --==================================================
     -- SAVE STATE
@@ -316,6 +462,7 @@ local function BeatGameSurvivor()
 
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
+
 end
 
 --==================================================
@@ -325,11 +472,20 @@ end
 local IGNORE_FILE = "ServerHop.txt"
 local HOUR = 3600
 
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
+local HttpService =
+    game:GetService("HttpService")
+
+local TeleportService =
+    game:GetService("TeleportService")
+
+local Players =
+    game:GetService("Players")
 
 local IgnoredServers = {}
+
+--==================================================
+-- GET IGNORED SERVERS
+--==================================================
 
 local function GetIgnoredServers()
 
@@ -340,12 +496,15 @@ local function GetIgnoredServers()
     local list = {}
     local now = os.time()
 
-    for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
+    for _, line in ipairs(
+        readfile(IGNORE_FILE):split("\n")
+    ) do
 
         local serverId, timestamp =
             line:match("([^|]+)|?(%d*)")
 
-        timestamp = tonumber(timestamp) or 0
+        timestamp =
+            tonumber(timestamp) or 0
 
         if serverId
             and serverId ~= ""
@@ -358,12 +517,20 @@ local function GetIgnoredServers()
     return list
 end
 
+--==================================================
+-- UPDATE IGNORED SERVERS
+--==================================================
+
 local function UpdateIgnoredServers(list)
 
     local lines = {}
 
     for serverId, timestamp in pairs(list) do
-        table.insert(lines, serverId .. "|" .. timestamp)
+
+        table.insert(
+            lines,
+            serverId .. "|" .. timestamp
+        )
     end
 
     writefile(
@@ -372,7 +539,8 @@ local function UpdateIgnoredServers(list)
     )
 end
 
-IgnoredServers = GetIgnoredServers()
+IgnoredServers =
+    GetIgnoredServers()
 
 --==================================================
 -- SERVER HOP STATE
@@ -398,18 +566,16 @@ local TimeUpdateEvent =
 
 StatusUpdateEvent.OnClientEvent:Connect(function(Status)
 
-    if Status == "WaitingForPlayers" then
+    if Status == "WaitingForPlayers"
+        or Status == "IntermissionStarting"
+        or Status == "Intermission" then
 
         IsRound = false
 
-    elseif Status == "IntermissionStarting" then
+        ResetRoundNotificationState()
 
-        IsRound = false
-
-    elseif Status == "Intermission" then
-
-        IsRound = false
     end
+
 end)
 
 --==================================================
@@ -419,8 +585,30 @@ end)
 TimeUpdateEvent.OnClientEvent:Connect(function(Status)
 
     if Status == "Round" then
+
         IsRound = true
+
+        local role = GetRole()
+
+        if not NotificationState.RoundNotificationShown then
+
+            if role == "Survivor"
+                or role == "Killer"
+                or role == "Spectator" then
+
+                NotificationState.RoundNotificationShown = true
+                NotificationState.CurrentRoundRole = role
+
+                Notify(
+                    "Round Started",
+                    "Role: " .. role,
+                    4
+                )
+            end
+        end
+
     end
+
 end)
 
 --==================================================
@@ -434,10 +622,12 @@ local function CanServerHop()
         return false
     end
 
-    -- Only Spectator or Killer may serverhop during round
+    -- Only Spectator or Killer
     local role = GetRole()
 
-    if role ~= "Spectator" and role ~= "Killer" then
+    if role ~= "Spectator"
+        and role ~= "Killer" then
+
         return false
     end
 
@@ -455,53 +645,108 @@ local function ServerHop()
     while Toggles.ServerHop.Value
         and not Library.Unloaded do
 
-        -- Check current round + current role LIVE
+        --==================================================
+        -- CHECK CURRENT ROUND + ROLE
+        --==================================================
+
         if not CanServerHop() then
+
             task.wait(0.5)
+
             continue
         end
 
-        local success, result = pcall(function()
+        --==================================================
+        -- SEARCH STARTED
+        --==================================================
 
-            local url =
-                "https://games.roblox.com/v1/games/"
-                .. game.PlaceId
-                .. "/servers/Public?limit=100"
-                .. "&sortOrder=Asc"
-                .. "&excludeFullGames=true"
-                .. "&cursor="
-                .. cursor
+        if not NotificationState.SearchStarted then
 
-            return HttpService:JSONDecode(
-                game:HttpGet(url)
+            NotificationState.SearchStarted = true
+            NotificationState.RequestErrorShown = false
+            NotificationState.NoServerShown = false
+
+            local role = GetRole()
+
+            Notify(
+                "Server Hop",
+                role
+                    .. " detected • Searching...",
+                4
             )
-        end)
+        end
+
+        --==================================================
+        -- REQUEST SERVER LIST
+        --==================================================
+
+        local success, result =
+            pcall(function()
+
+                local url =
+                    "https://games.roblox.com/v1/games/"
+                    .. game.PlaceId
+                    .. "/servers/Public?limit=100"
+                    .. "&sortOrder=Asc"
+                    .. "&excludeFullGames=true"
+                    .. "&cursor="
+                    .. cursor
+
+                return HttpService:JSONDecode(
+                    game:HttpGet(url)
+                )
+            end)
+
+        --==================================================
+        -- REQUEST FAILED
+        --==================================================
 
         if not success
             or not result
             or not result.data then
 
+            if not NotificationState.RequestErrorShown then
+
+                NotificationState.RequestErrorShown = true
+
+                Notify(
+                    "Server Hop",
+                    "Failed to fetch servers • Retrying...",
+                    4
+                )
+            end
+
             task.wait(3)
+
             continue
         end
 
-        local ServersList = result.data
+        NotificationState.RequestErrorShown = false
+
+        local ServersList =
+            result.data
 
         --==================================================
         -- PRIORITY: LOWEST PING
         --==================================================
 
-        table.sort(ServersList, function(a, b)
+        table.sort(
+            ServersList,
+            function(a, b)
 
-            return
-                (a.ping or math.huge)
-                <
-                (b.ping or math.huge)
-        end)
+                return
+                    (a.ping or math.huge)
+                    <
+                    (b.ping or math.huge)
+
+            end
+        )
 
         --==================================================
         -- FIND SERVER
         --==================================================
+
+        local FoundServer = false
 
         for _, Server in ipairs(ServersList) do
 
@@ -513,18 +758,54 @@ local function ServerHop()
             if
                 Server.id
                 and Server.id ~= game.JobId
+
                 and Server.playing
+
                 and Server.playing >= 1
                 and Server.playing <= 2
+
                 and not IgnoredServers[Server.id]
             then
 
-                -- Mark server before teleport
-                IgnoredServers[Server.id] = os.time()
+                FoundServer = true
+
+                local playerCount =
+                    Server.playing or 0
+
+                local ping =
+                    Server.ping or 0
+
+                --==================================================
+                -- SERVER FOUND
+                --==================================================
+
+                Notify(
+                    "Server Hop",
+                    string.format(
+                        "%d players • %dms • Teleporting...",
+                        playerCount,
+                        ping
+                    ),
+                    5
+                )
+
+                --==================================================
+                -- MARK SERVER BEFORE TELEPORT
+                --==================================================
+
+                IgnoredServers[Server.id] =
+                    os.time()
 
                 UpdateIgnoredServers(
                     IgnoredServers
                 )
+
+                NotificationState.LastServer =
+                    Server.id
+
+                --==================================================
+                -- TELEPORT
+                --==================================================
 
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
@@ -537,21 +818,42 @@ local function ServerHop()
         end
 
         --==================================================
+        -- NO SERVER FOUND ON CURRENT PAGE
+        --==================================================
+
+        if not FoundServer
+            and not NotificationState.NoServerShown then
+
+            NotificationState.NoServerShown = true
+
+            Notify(
+                "Server Hop",
+                "No suitable server found • Continuing search...",
+                4
+            )
+        end
+
+        --==================================================
         -- NEXT PAGE
         --==================================================
 
-        cursor = result.nextPageCursor
+        cursor =
+            result.nextPageCursor
 
         if not cursor then
 
             -- Start pagination again
             cursor = ""
 
+            NotificationState.NoServerShown = false
+
             task.wait(1)
+
         else
 
             task.wait(0.2)
         end
+
     end
 end
 
@@ -559,249 +861,480 @@ end
 -- AUTO FARM TOGGLE
 --==================================================
 
-AutoFarmGroup:AddToggle("EnableAutoFarm", {
-    Text = "Enable Auto Farm",
-    Tooltip = "Teleport Survivor to the detected finish location",
+AutoFarmGroup:AddToggle(
+    "EnableAutoFarm",
+    {
+        Text = "Enable Auto Farm",
 
-    Default = false,
-})
+        Tooltip =
+            "Teleport Survivor to the detected finish location",
+
+        Default = false,
+
+        Callback = function(Value)
+
+            if Value then
+
+                Notify(
+                    "Auto Farm",
+                    "Enabled.",
+                    3
+                )
+
+            else
+
+                Notify(
+                    "Auto Farm",
+                    "Disabled.",
+                    3
+                )
+
+                BeatState.BeatSurvivorDone = false
+                BeatState.LastFinishPos = nil
+
+                NotificationState.MapDetected = false
+                NotificationState.FinishDetected = false
+            end
+        end,
+    }
+)
 
 --==================================================
 -- AUTO SERVERHOP
 --==================================================
 
-AutoFarmGroup:AddToggle("ServerHop", {
-    Text = "Server Hop",
-    Tooltip = "Hop to 1-3 player servers as Spectator",
+AutoFarmGroup:AddToggle(
+    "ServerHop",
+    {
+        Text = "Server Hop",
 
-    Default = false,
+        Tooltip =
+            "Hop to 1-2 player servers as Killer or Spectator",
 
-    Callback = function(Value)
+        Default = false,
 
-        if Value then
+        Callback = function(Value)
 
-            task.spawn(function()
-                ServerHop()
-            end)
+            if Value then
 
-        end
-    end,
-})
+                local role = GetRole()
+
+                if IsRound
+                    and (
+                        role == "Killer"
+                        or role == "Spectator"
+                    ) then
+
+                    Notify(
+                        "Server Hop",
+                        "Enabled • Searching...",
+                        4
+                    )
+
+                elseif IsRound
+                    and role == "Survivor" then
+
+                    Notify(
+                        "Server Hop",
+                        "Enabled • Waiting for Survivor to finish...",
+                        4
+                    )
+
+                else
+
+                    Notify(
+                        "Server Hop",
+                        "Enabled • Waiting for valid condition...",
+                        4
+                    )
+                end
+
+                task.spawn(function()
+                    ServerHop()
+                end)
+
+            else
+
+                Notify(
+                    "Server Hop",
+                    "Disabled.",
+                    3
+                )
+
+                NotificationState.SearchStarted = false
+                NotificationState.RequestErrorShown = false
+                NotificationState.NoServerShown = false
+            end
+
+        end,
+    }
+)
 
 --==================================================
 -- AUTO EXECUTE
 --==================================================
 
-AutoFarmGroup:AddToggle("AutoExecute", {
-    Text = "Auto Execute",
-    Tooltip = "Automatically execute the script",
+AutoFarmGroup:AddToggle(
+    "AutoExecute",
+    {
+        Text = "Auto Execute",
 
-    Default = false,
-})
+        Tooltip =
+            "Automatically execute the script",
+
+        Default = false,
+    }
+)
 
 --==================================================
 -- WEBHOOK
 --==================================================
 
-WebhookGroup:AddToggle("EnableWebhook", {
-    Text = "Enable Webhook",
-    Tooltip = "Enable webhook notifications",
+WebhookGroup:AddToggle(
+    "EnableWebhook",
+    {
+        Text = "Enable Webhook",
 
-    Default = false,
-})
+        Tooltip =
+            "Enable webhook notifications",
 
-WebhookGroup:AddInput("WebhookLink", {
-    Text = "Webhook Link",
+        Default = false,
+    }
+)
 
-    Default = "",
-    Placeholder = "Enter webhook URL...",
+WebhookGroup:AddInput(
+    "WebhookLink",
+    {
+        Text = "Webhook Link",
 
-    Numeric = false,
-    Finished = false,
-    ClearTextOnFocus = false,
-})
+        Default = "",
+
+        Placeholder =
+            "Enter webhook URL...",
+
+        Numeric = false,
+
+        Finished = false,
+
+        ClearTextOnFocus = false,
+    }
+)
+
+--==================================================
+-- TEST NOTIFICATIONS
+--==================================================
 
 local TestNotificationGroup =
-    Tabs.AutoFarm:AddRightGroupbox("Test Notifications", "bell")
+    Tabs.AutoFarm:AddRightGroupbox(
+        "Test Notifications",
+        "bell"
+    )
 
-TestNotificationGroup:AddButton("1. Simple", function()
-    Library:Notify({
-        Title = "Server Hop",
-        Description = "Simple notification",
-        Time = 4,
-    })
-end)
+TestNotificationGroup:AddButton(
+    "1. Simple",
+    function()
 
-TestNotificationGroup:AddButton("2. Icon", function()
-    Library:Notify({
-        Title = "Server Hop",
-        Description = "Notification with an icon",
-        Icon = "info",
-        Time = 4,
-    })
-end)
+        Library:Notify({
+            Title = "Server Hop",
+            Description = "Simple notification",
+            Time = 4,
+        })
 
-TestNotificationGroup:AddButton("3. Big Icon", function()
-    Library:Notify({
-        Title = "Server Hop",
-        Description = "Notification with a big icon",
-        BigIcon = "rbxassetid://10204738596",
-        IconColor = Color3.new(0, 1, 0),
-        Time = 4,
-    })
-end)
+    end
+)
 
-TestNotificationGroup:AddButton("4. Persistent", function()
-    local Notification = Library:Notify({
-        Title = "Server Hop",
-        Description = "Persistent notification",
-        Persist = true,
-    })
+TestNotificationGroup:AddButton(
+    "2. Icon",
+    function()
 
-    task.delay(5, function()
-        if Notification then
+        Library:Notify({
+            Title = "Server Hop",
+            Description = "Notification with an icon",
+            Icon = "info",
+            Time = 4,
+        })
+
+    end
+)
+
+TestNotificationGroup:AddButton(
+    "3. Big Icon",
+    function()
+
+        Library:Notify({
+            Title = "Server Hop",
+            Description = "Notification with a big icon",
+            BigIcon = "rbxassetid://10204738596",
+            IconColor = Color3.new(0, 1, 0),
+            Time = 4,
+        })
+
+    end
+)
+
+TestNotificationGroup:AddButton(
+    "4. Persistent",
+    function()
+
+        local Notification =
+            Library:Notify({
+                Title = "Server Hop",
+                Description = "Persistent notification",
+                Persist = true,
+            })
+
+        task.delay(
+            5,
+            function()
+
+                if Notification then
+                    Notification:Destroy()
+                end
+
+            end
+        )
+
+    end
+)
+
+TestNotificationGroup:AddButton(
+    "5. Update",
+    function()
+
+        local Notification =
+            Library:Notify({
+                Title = "Server Hop",
+                Description = "Waiting...",
+                Persist = true,
+            })
+
+        task.delay(
+            2,
+            function()
+
+                Notification:ChangeTitle(
+                    "Server Hop - Updated"
+                )
+
+                Notification:ChangeDescription(
+                    "Notification has been updated!"
+                )
+
+            end
+        )
+
+        task.delay(
+            5,
+            function()
+
+                Notification:Destroy()
+
+            end
+        )
+
+    end
+)
+
+TestNotificationGroup:AddButton(
+    "6. Progress",
+    function()
+
+        local Notification =
+            Library:Notify({
+                Title = "Server Hop",
+                Description = "Testing progress...",
+                Steps = 10,
+            })
+
+        task.spawn(function()
+
+            for i = 1, 10 do
+
+                Notification:ChangeStep(i)
+
+                task.wait(0.3)
+            end
+
+            task.wait(1)
+
             Notification:Destroy()
-        end
-    end)
-end)
 
-TestNotificationGroup:AddButton("5. Update", function()
-    local Notification = Library:Notify({
-        Title = "Server Hop",
-        Description = "Waiting...",
-        Persist = true,
-    })
+        end)
 
-    task.delay(2, function()
-        Notification:ChangeTitle("Server Hop - Updated")
-        Notification:ChangeDescription("Notification has been updated!")
-    end)
-
-    task.delay(5, function()
-        Notification:Destroy()
-    end)
-end)
-
-TestNotificationGroup:AddButton("6. Progress", function()
-    local Notification = Library:Notify({
-        Title = "Server Hop",
-        Description = "Testing progress...",
-        Steps = 10,
-    })
-
-    task.spawn(function()
-        for i = 1, 10 do
-            Notification:ChangeStep(i)
-            task.wait(0.3)
-        end
-
-        task.wait(1)
-        Notification:Destroy()
-    end)
-end)
+    end
+)
 
 --==================================================
 -- SETTINGS
 --==================================================
 
 local MenuGroup =
-    Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
+    Tabs.Settings:AddLeftGroupbox(
+        "Menu",
+        "wrench"
+    )
 
-MenuGroup:AddToggle("KeybindMenuOpen", {
-    Default = Library.KeybindFrame.Visible,
-    Text = "Open Keybind Menu",
+MenuGroup:AddToggle(
+    "KeybindMenuOpen",
+    {
+        Default =
+            Library.KeybindFrame.Visible,
 
-    Callback = function(Value)
-        Library.KeybindFrame.Visible = Value
-    end,
-})
+        Text = "Open Keybind Menu",
 
-MenuGroup:AddToggle("ShowCustomCursor", {
-    Text = "Custom Cursor",
-    Default = Library.ShowCustomCursor,
+        Callback = function(Value)
 
-    Callback = function(Value)
-        Library.ShowCustomCursor = Value
-    end,
-})
+            Library.KeybindFrame.Visible =
+                Value
 
-MenuGroup:AddDropdown("NotificationSide", {
-    Values = {
-        "Left",
-        "Right",
-    },
+        end,
+    }
+)
 
-    Default = "Right",
-    Text = "Notification Side",
+MenuGroup:AddToggle(
+    "ShowCustomCursor",
+    {
+        Text = "Custom Cursor",
 
-    Callback = function(Value)
-        Library:SetNotifySide(Value)
-    end,
-})
+        Default =
+            Library.ShowCustomCursor,
 
-MenuGroup:AddDropdown("DPIDropdown", {
-    Values = {
-        "50%",
-        "75%",
-        "100%",
-        "125%",
-        "150%",
-        "175%",
-        "200%",
-    },
+        Callback = function(Value)
 
-    Default = "100%",
-    Text = "DPI Scale",
+            Library.ShowCustomCursor =
+                Value
 
-    Callback = function(Value)
+        end,
+    }
+)
 
-        local DPI =
-            tonumber(Value:gsub("%%", ""))
+MenuGroup:AddDropdown(
+    "NotificationSide",
+    {
+        Values = {
+            "Left",
+            "Right",
+        },
 
-        if DPI then
-            Library:SetDPIScale(DPI)
-        end
-    end,
-})
+        Default = "Right",
 
-MenuGroup:AddSlider("UICornerSlider", {
-    Text = "Corner Radius",
+        Text = "Notification Side",
 
-    Default = Library.CornerRadius,
-    Min = 0,
-    Max = 20,
-    Rounding = 0,
+        Callback = function(Value)
 
-    Callback = function(Value)
-        Window:SetCornerRadius(Value)
-    end,
-})
+            Library:SetNotifySide(
+                Value
+            )
+
+        end,
+    }
+)
+
+MenuGroup:AddDropdown(
+    "DPIDropdown",
+    {
+        Values = {
+            "50%",
+            "75%",
+            "100%",
+            "125%",
+            "150%",
+            "175%",
+            "200%",
+        },
+
+        Default = "100%",
+
+        Text = "DPI Scale",
+
+        Callback = function(Value)
+
+            local DPI =
+                tonumber(
+                    Value:gsub("%%", "")
+                )
+
+            if DPI then
+
+                Library:SetDPIScale(
+                    DPI
+                )
+
+            end
+
+        end,
+    }
+)
+
+MenuGroup:AddSlider(
+    "UICornerSlider",
+    {
+        Text = "Corner Radius",
+
+        Default =
+            Library.CornerRadius,
+
+        Min = 0,
+        Max = 20,
+        Rounding = 0,
+
+        Callback = function(Value)
+
+            Window:SetCornerRadius(
+                Value
+            )
+
+        end,
+    }
+)
 
 MenuGroup:AddDivider()
 
 MenuGroup:AddLabel("Menu bind")
-    :AddKeyPicker("MenuKeybind", {
-        Default = "RightShift",
-        NoUI = true,
-        Text = "Menu keybind",
-    })
+    :AddKeyPicker(
+        "MenuKeybind",
+        {
+            Default = "RightShift",
+            NoUI = true,
+            Text = "Menu keybind",
+        }
+    )
 
-MenuGroup:AddButton("Unload", function()
-    Library:Unload()
-end)
+MenuGroup:AddButton(
+    "Unload",
+    function()
 
-Library.ToggleKeybind = Options.MenuKeybind
+        Library:Unload()
+
+    end
+)
+
+Library.ToggleKeybind =
+    Options.MenuKeybind
 
 --==================================================
 -- SAVE / THEME MANAGER
 --==================================================
 
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
+ThemeManager:SetLibrary(
+    Library
+)
 
-ThemeManager:SetFolder("AutoFarm")
-SaveManager:SetFolder("AutoFarm")
-SaveManager:SetSubFolder("Settings")
+SaveManager:SetLibrary(
+    Library
+)
+
+ThemeManager:SetFolder(
+    "AutoFarm"
+)
+
+SaveManager:SetFolder(
+    "AutoFarm"
+)
+
+SaveManager:SetSubFolder(
+    "Settings"
+)
 
 SaveManager:IgnoreThemeSettings()
 
@@ -809,8 +1342,13 @@ SaveManager:SetIgnoreIndexes({
     "MenuKeybind",
 })
 
-SaveManager:BuildConfigSection(Tabs.Settings)
-ThemeManager:ApplyToTab(Tabs.Settings)
+SaveManager:BuildConfigSection(
+    Tabs.Settings
+)
+
+ThemeManager:ApplyToTab(
+    Tabs.Settings
+)
 
 SaveManager:LoadAutoloadConfig()
 
@@ -823,10 +1361,52 @@ task.spawn(function()
     while not Library.Unloaded do
 
         pcall(function()
+
+            local CurrentRole =
+                GetRole()
+
+            --==================================================
+            -- SURVIVOR -> SPECTATOR
+            -- ESCAPE COMPLETED
+            --==================================================
+
+            if IsRound
+                and NotificationState.LastRole == "Survivor"
+                and CurrentRole == "Spectator"
+                and not NotificationState.EscapeCompleted then
+
+                NotificationState.EscapeCompleted = true
+
+                Notify(
+                    "Auto Farm",
+                    "Escape completed • Waiting for server hop...",
+                    5
+                )
+            end
+
+            NotificationState.LastRole =
+                CurrentRole
+
+            --==================================================
+            -- AUTO FARM
+            --==================================================
+
             BeatGameSurvivor()
+
         end)
 
         task.wait(0.1)
+
     end
 
 end)
+
+--==================================================
+-- SCRIPT READY
+--==================================================
+
+Notify(
+    "VD Auto Farm",
+    "Script loaded successfully.",
+    4
+)
