@@ -55,11 +55,7 @@ local WebhookGroup =
 local BeatState = {
     LastFinishPos = nil,
     BeatSurvivorDone = false,
-
-    -- Survivor finish delay
     SurvivorWaitStart = nil,
-
-    -- Delay after Survivor -> Spectator
     EscapeSpectatorWaitStart = nil,
 }
 
@@ -118,12 +114,9 @@ local function ResetRoundNotificationState()
     NotificationState.RequestErrorShown = false
     NotificationState.NoServerShown = false
 
-    -- Reset Survivor automation state every round
     BeatState.LastFinishPos = nil
     BeatState.BeatSurvivorDone = false
     BeatState.SurvivorWaitStart = nil
-
-    -- Reset post-escape delay
     BeatState.EscapeSpectatorWaitStart = nil
 end
 
@@ -185,6 +178,7 @@ local function BeatGameSurvivor()
 
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
+        BeatState.SurvivorWaitStart = nil
 
         return
     end
@@ -194,12 +188,6 @@ local function BeatGameSurvivor()
     --==================================================
 
     if GetRole() ~= "Survivor" then
-        -- If we leave Survivor before the 15-second countdown
-        -- finishes, cancel the pending countdown.
-        if not BeatState.BeatSurvivorDone then
-            BeatState.SurvivorWaitStart = nil
-        end
-
         return
     end
 
@@ -422,7 +410,6 @@ local function BeatGameSurvivor()
         if dist > 50 then
 
             BeatState.BeatSurvivorDone = false
-            BeatState.SurvivorWaitStart = nil
 
             NotificationState.FinishDetected = false
         end
@@ -460,17 +447,11 @@ local function BeatGameSurvivor()
         BeatState.SurvivorWaitStart = os.clock()
     end
 
-    local elapsed =
-        os.clock() - BeatState.SurvivorWaitStart
-
-    if elapsed < 15 then
+    if os.clock() - BeatState.SurvivorWaitStart < 15 then
         return
     end
 
-    --==================================================
-    -- CHECK ROLE BEFORE TELEPORT
-    --==================================================
-
+    -- Role may have changed while waiting.
     if GetRole() ~= "Survivor" then
         BeatState.SurvivorWaitStart = nil
         return
@@ -583,6 +564,7 @@ IgnoredServers =
 --==================================================
 
 local IsRound = false
+local ServerHopRunning = false
 
 local ReplicatedStorage =
     game:GetService("ReplicatedStorage")
@@ -660,29 +642,19 @@ local function CanServerHop()
 
     local role = GetRole()
 
-    --==================================================
-    -- SURVIVOR -> SPECTATOR POST-ESCAPE DELAY
-    --==================================================
-
+    -- After a successful Survivor escape, keep the player in the
+    -- current server for 3 seconds before allowing the hop.
     if role == "Spectator"
         and BeatState.EscapeSpectatorWaitStart then
 
-        local elapsed =
-            os.clock()
-            - BeatState.EscapeSpectatorWaitStart
-
-        if elapsed < 3 then
+        if os.clock() - BeatState.EscapeSpectatorWaitStart < 3 then
             return false
         end
 
-        -- 3-second delay completed
         BeatState.EscapeSpectatorWaitStart = nil
     end
 
-    --==================================================
-    -- ONLY SPECTATOR OR KILLER
-    --==================================================
-
+    -- Only Spectator or Killer may hop.
     if role ~= "Spectator"
         and role ~= "Killer" then
 
@@ -698,38 +670,41 @@ end
 
 local function ServerHop()
 
+    if ServerHopRunning then
+        return
+    end
+
+    ServerHopRunning = true
+
     local cursor = ""
 
     while Toggles.ServerHop.Value
         and not Library.Unloaded do
 
         --==================================================
-        -- CHECK CURRENT ROUND + ROLE
+        -- WAIT FOR A VALID HOP CONDITION
         --==================================================
 
         if not CanServerHop() then
-
             task.wait(0.5)
-
             continue
         end
 
         --==================================================
-        -- SEARCH STARTED
+        -- SEARCH STARTED / NEW SEARCH CYCLE
         --==================================================
 
         if not NotificationState.SearchStarted then
-
             NotificationState.SearchStarted = true
             NotificationState.RequestErrorShown = false
             NotificationState.NoServerShown = false
+            cursor = ""
 
             local role = GetRole()
 
             Notify(
                 "Server Hop     \n",
-                role
-                    .. " detected • Searching...     ",
+                role .. " detected • Searching...     ",
                 4
             )
         end
@@ -764,7 +739,6 @@ local function ServerHop()
             or not result.data then
 
             if not NotificationState.RequestErrorShown then
-
                 NotificationState.RequestErrorShown = true
 
                 Notify(
@@ -775,24 +749,20 @@ local function ServerHop()
             end
 
             task.wait(3)
-
             continue
         end
 
         NotificationState.RequestErrorShown = false
 
-        local ServersList =
-            result.data
+        local ServersList = result.data
+        local FoundServer = false
 
         --==================================================
         -- FIND SERVER
         --==================================================
 
-        local FoundServer = false
-
         for _, Server in ipairs(ServersList) do
 
-            -- Check again before teleporting
             if not CanServerHop() then
                 break
             end
@@ -800,26 +770,16 @@ local function ServerHop()
             if
                 Server.id
                 and Server.id ~= game.JobId
-
                 and Server.playing
-
                 and Server.playing >= 1
                 and Server.playing <= 2
-
                 and not IgnoredServers[Server.id]
             then
 
                 FoundServer = true
 
-                local playerCount =
-                    Server.playing or 0
-
-                local ping =
-                    Server.ping or 0
-
-                --==================================================
-                -- SERVER FOUND
-                --==================================================
+                local playerCount = Server.playing or 0
+                local ping = Server.ping or 0
 
                 Notify(
                     "Server Hop     \n",
@@ -831,23 +791,11 @@ local function ServerHop()
                     5
                 )
 
-                --==================================================
-                -- MARK SERVER BEFORE TELEPORT
-                --==================================================
-
-                IgnoredServers[Server.id] =
-                    os.time()
-
-                UpdateIgnoredServers(
-                    IgnoredServers
-                )
-
-                NotificationState.LastServer =
-                    Server.id
-
-                --==================================================
-                -- TELEPORT
-                --==================================================
+                -- Mark before teleport so the same server is not selected
+                -- again if Roblox/executor delays or retries the teleport.
+                IgnoredServers[Server.id] = os.time()
+                UpdateIgnoredServers(IgnoredServers)
+                NotificationState.LastServer = Server.id
 
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
@@ -855,12 +803,13 @@ local function ServerHop()
                     Players.LocalPlayer
                 )
 
+                ServerHopRunning = false
                 return
             end
         end
 
         --==================================================
-        -- NO SERVER FOUND ON CURRENT PAGE
+        -- NO SERVER ON THIS PAGE
         --==================================================
 
         if not FoundServer
@@ -876,27 +825,24 @@ local function ServerHop()
         end
 
         --==================================================
-        -- NEXT PAGE
+        -- NEXT PAGE / NEW SEARCH CYCLE
         --==================================================
 
-        cursor =
-            result.nextPageCursor
+        cursor = result.nextPageCursor
 
         if not cursor then
-
-            -- Start pagination again
+            -- We exhausted the current public-server list.
+            -- Start a completely fresh scan without requiring the user
+            -- to toggle Server Hop off and on again.
             cursor = ""
-
             NotificationState.NoServerShown = false
-
             task.wait(1)
-
         else
-
             task.wait(0.2)
         end
-
     end
+
+    ServerHopRunning = false
 end
 
 --==================================================
@@ -1008,6 +954,7 @@ AutoFarmGroup:AddToggle(
                 NotificationState.SearchStarted = false
                 NotificationState.RequestErrorShown = false
                 NotificationState.NoServerShown = false
+                BeatState.EscapeSpectatorWaitStart = nil
             end
 
         end,
@@ -1420,8 +1367,6 @@ task.spawn(function()
                 and not NotificationState.EscapeCompleted then
 
                 NotificationState.EscapeCompleted = true
-
-                -- Wait 3 seconds after escaping before Server Hop
                 BeatState.EscapeSpectatorWaitStart = os.clock()
 
                 Notify(
