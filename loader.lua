@@ -55,6 +55,12 @@ local WebhookGroup =
 local BeatState = {
     LastFinishPos = nil,
     BeatSurvivorDone = false,
+
+    -- Survivor finish delay
+    SurvivorWaitStart = nil,
+
+    -- Delay after Survivor -> Spectator
+    EscapeSpectatorWaitStart = nil,
 }
 
 --==================================================
@@ -111,6 +117,14 @@ local function ResetRoundNotificationState()
 
     NotificationState.RequestErrorShown = false
     NotificationState.NoServerShown = false
+
+    -- Reset Survivor automation state every round
+    BeatState.LastFinishPos = nil
+    BeatState.BeatSurvivorDone = false
+    BeatState.SurvivorWaitStart = nil
+
+    -- Reset post-escape delay
+    BeatState.EscapeSpectatorWaitStart = nil
 end
 
 --==================================================
@@ -180,6 +194,12 @@ local function BeatGameSurvivor()
     --==================================================
 
     if GetRole() ~= "Survivor" then
+        -- If we leave Survivor before the 15-second countdown
+        -- finishes, cancel the pending countdown.
+        if not BeatState.BeatSurvivorDone then
+            BeatState.SurvivorWaitStart = nil
+        end
+
         return
     end
 
@@ -402,6 +422,7 @@ local function BeatGameSurvivor()
         if dist > 50 then
 
             BeatState.BeatSurvivorDone = false
+            BeatState.SurvivorWaitStart = nil
 
             NotificationState.FinishDetected = false
         end
@@ -422,17 +443,48 @@ local function BeatGameSurvivor()
     if not NotificationState.FinishDetected then
 
         NotificationState.FinishDetected = true
+        BeatState.SurvivorWaitStart = os.clock()
 
         Notify(
             "Auto Farm     \n",
-            "Finish detected • Teleporting...     ",
+            "Finish detected • Waiting 15 seconds...     ",
             4
         )
     end
 
     --==================================================
+    -- WAIT 15 SECONDS BEFORE ESCAPE
+    --==================================================
+
+    if not BeatState.SurvivorWaitStart then
+        BeatState.SurvivorWaitStart = os.clock()
+    end
+
+    local elapsed =
+        os.clock() - BeatState.SurvivorWaitStart
+
+    if elapsed < 15 then
+        return
+    end
+
+    --==================================================
+    -- CHECK ROLE BEFORE TELEPORT
+    --==================================================
+
+    if GetRole() ~= "Survivor" then
+        BeatState.SurvivorWaitStart = nil
+        return
+    end
+
+    --==================================================
     -- TELEPORT TO FINISH
     --==================================================
+
+    Notify(
+        "Auto Farm     \n",
+        "15 seconds passed • Escaping...     ",
+        4
+    )
 
     root.CFrame =
         CFrame.new(
@@ -445,6 +497,7 @@ local function BeatGameSurvivor()
 
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
+    BeatState.SurvivorWaitStart = nil
 
 end
 
@@ -605,8 +658,30 @@ local function CanServerHop()
         return false
     end
 
-    -- Only Spectator or Killer
     local role = GetRole()
+
+    --==================================================
+    -- SURVIVOR -> SPECTATOR POST-ESCAPE DELAY
+    --==================================================
+
+    if role == "Spectator"
+        and BeatState.EscapeSpectatorWaitStart then
+
+        local elapsed =
+            os.clock()
+            - BeatState.EscapeSpectatorWaitStart
+
+        if elapsed < 3 then
+            return false
+        end
+
+        -- 3-second delay completed
+        BeatState.EscapeSpectatorWaitStart = nil
+    end
+
+    --==================================================
+    -- ONLY SPECTATOR OR KILLER
+    --==================================================
 
     if role ~= "Spectator"
         and role ~= "Killer" then
@@ -858,6 +933,8 @@ AutoFarmGroup:AddToggle(
 
                 BeatState.BeatSurvivorDone = false
                 BeatState.LastFinishPos = nil
+                BeatState.SurvivorWaitStart = nil
+                BeatState.EscapeSpectatorWaitStart = nil
 
                 NotificationState.MapDetected = false
                 NotificationState.FinishDetected = false
@@ -1344,9 +1421,12 @@ task.spawn(function()
 
                 NotificationState.EscapeCompleted = true
 
+                -- Wait 3 seconds after escaping before Server Hop
+                BeatState.EscapeSpectatorWaitStart = os.clock()
+
                 Notify(
                     "Auto Farm     \n",
-                    "Escape completed • Waiting for server hop...     ",
+                    "Escape completed • Waiting 3 seconds...     ",
                     5
                 )
             end
