@@ -103,32 +103,43 @@ local function Notify(Title, Description, Time)
                 return
             end
 
-            local TitleLabel
-            local DescriptionLabel
-
+            -- Cari container yang berisi Title + Description
             for _, Object in ipairs(Root:GetDescendants()) do
-                if Object:IsA("TextLabel") then
-                    local Text = Object.Text
 
-                    if Text == Title then
-                        TitleLabel = Object
-                    elseif Text == Description then
-                        DescriptionLabel = Object
+                if Object:IsA("Frame") then
+
+                    local TitleFound = false
+                    local DescriptionFound = false
+                    local Layout
+
+                    for _, Child in ipairs(Object:GetChildren()) do
+
+                        if Child:IsA("TextLabel") then
+
+                            if Child.Text == Title then
+                                TitleFound = true
+
+                            elseif Child.Text == Description then
+                                DescriptionFound = true
+                            end
+
+                        elseif Child:IsA("UIListLayout") then
+                            Layout = Child
+                        end
+
+                    end
+
+                    -- Ini container Title + Description
+                    if TitleFound
+                        and DescriptionFound
+                        and Layout then
+
+                        Layout.Padding =
+                            UDim.new(0, 8)
+
+                        break
                     end
                 end
-            end
-
-            if TitleLabel and DescriptionLabel then
-
-                -- Geser description ke bawah
-                DescriptionLabel.Position =
-                    UDim2.new(
-                        DescriptionLabel.Position.X.Scale,
-                        DescriptionLabel.Position.X.Offset,
-                        DescriptionLabel.Position.Y.Scale,
-                        DescriptionLabel.Position.Y.Offset + 6
-                    )
-
             end
         end)
     end)
