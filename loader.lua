@@ -876,8 +876,8 @@ AutoFarmGroup:AddToggle(
             if Value then
 
                 Notify(
-                    "Auto Farm\n",
-                    "Enabled.",
+                    "Auto Farm     \n",
+                    "Enabled.     ",
                     3
                 )
 
@@ -885,7 +885,7 @@ AutoFarmGroup:AddToggle(
 
                 Notify(
                     "Auto Farm\n",
-                    "Disabled.     ",
+                    "Disabled.",
                     3
                 )
 
