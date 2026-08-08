@@ -102,7 +102,6 @@ local function ResetRoundNotificationState()
 
     NotificationState.LastRole = nil
 
-    NotificationState.MapDetected = false
     NotificationState.FinishDetected = false
     NotificationState.EscapeCompleted = false
 
