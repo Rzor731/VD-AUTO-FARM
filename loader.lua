@@ -434,8 +434,10 @@ local function CanServerHop()
         return false
     end
 
-    -- Only Spectator may serverhop during round
-    if GetRole() ~= "Spectator" then
+    -- Only Spectator or Killer may serverhop during round
+    local role = GetRole()
+
+    if role ~= "Spectator" and role ~= "Killer" then
         return false
     end
 
