@@ -392,22 +392,6 @@ local function BeatGameSurvivor()
     end
 
     --==================================================
-    -- MAP DETECTED NOTIFICATION
-    --==================================================
-
-    if not NotificationState.MapDetected then
-
-        NotificationState.MapDetected = true
-
-        Notify(
-            "Auto Farm\n",
-            "Map detected • "
-                .. (detectedMap or "Unknown"),
-            3
-        )
-    end
-
-    --==================================================
     -- FINISH POSITION CHANGE CHECK
     --==================================================
 
@@ -441,8 +425,8 @@ local function BeatGameSurvivor()
         NotificationState.FinishDetected = true
 
         Notify(
-            "Auto Farm",
-            "Finish detected • Teleporting...",
+            "Auto Farm     \n",
+            "Finish detected • Teleporting...     ",
             4
         )
     end
@@ -600,8 +584,8 @@ TimeUpdateEvent.OnClientEvent:Connect(function(Status)
                 NotificationState.CurrentRoundRole = role
 
                 Notify(
-                    "Round Started",
-                    "Role: " .. role,
+                    "Round Started     \n",
+                    "Role: " .. role     ,
                     4
                 )
             end
@@ -669,9 +653,9 @@ local function ServerHop()
             local role = GetRole()
 
             Notify(
-                "Server Hop",
+                "Server Hop     \n",
                 role
-                    .. " detected • Searching...",
+                    .. " detected • Searching...     ",
                 4
             )
         end
@@ -710,8 +694,8 @@ local function ServerHop()
                 NotificationState.RequestErrorShown = true
 
                 Notify(
-                    "Server Hop",
-                    "Failed to fetch servers • Retrying...",
+                    "Server Hop     \n",
+                    "Failed to fetch servers • Retrying...     ",
                     4
                 )
             end
@@ -780,9 +764,9 @@ local function ServerHop()
                 --==================================================
 
                 Notify(
-                    "Server Hop",
+                    "Server Hop     \n",
                     string.format(
-                        "%d players • %dms • Teleporting...",
+                        "%d players • %dms • Teleporting...     ",
                         playerCount,
                         ping
                     ),
@@ -827,8 +811,8 @@ local function ServerHop()
             NotificationState.NoServerShown = true
 
             Notify(
-                "Server Hop",
-                "No suitable server found • Continuing search...",
+                "Server Hop     \n",
+                "No suitable server found • Continuing search...     ",
                 4
             )
         end
@@ -884,8 +868,8 @@ AutoFarmGroup:AddToggle(
             else
 
                 Notify(
-                    "Auto Farm\n",
-                    "Disabled.",
+                    "Auto Farm     \n",
+                    "Disabled.     ",
                     3
                 )
 
@@ -926,8 +910,8 @@ AutoFarmGroup:AddToggle(
                     ) then
 
                     Notify(
-                        "Server Hop",
-                        "Enabled • Searching...",
+                        "Server Hop     \n",
+                        "Searching...     ",
                         4
                     )
 
@@ -935,16 +919,16 @@ AutoFarmGroup:AddToggle(
                     and role == "Survivor" then
 
                     Notify(
-                        "Server Hop",
-                        "Enabled • Waiting for Survivor to finish...",
+                        "Server Hop     \n",
+                        "Waiting for Survivor to finish...     ",
                         4
                     )
 
                 else
 
                     Notify(
-                        "Server Hop",
-                        "Enabled • Waiting for valid condition...",
+                        "Server Hop     \n",
+                        "Waiting for valid condition...     ",
                         4
                     )
                 end
@@ -956,8 +940,8 @@ AutoFarmGroup:AddToggle(
             else
 
                 Notify(
-                    "Server Hop",
-                    "Disabled.",
+                    "Server Hop     \n",
+                    "Disabled.     ",
                     3
                 )
 
@@ -1378,8 +1362,8 @@ task.spawn(function()
                 NotificationState.EscapeCompleted = true
 
                 Notify(
-                    "Auto Farm",
-                    "Escape completed • Waiting for server hop...",
+                    "Auto Farm     \n",
+                    "Escape completed • Waiting for server hop...     ",
                     5
                 )
             end
@@ -1406,7 +1390,7 @@ end)
 --==================================================
 
 Notify(
-    "VD Auto Farm",
-    "Script loaded successfully.",
+    "VD Auto Farm     \n",
+    "Script loaded successfully.     ",
     4
 )
