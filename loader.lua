@@ -140,6 +140,7 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     end)
 
     -- Player Details
+	local stats = GetFarmStats()
     local username = LocalPlayer.Name
     local displayName = LocalPlayer.DisplayName
     local userId = LocalPlayer.UserId
@@ -162,27 +163,42 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
                 ["url"] = avatarUrl
             },
             ["fields"] = {
-                {
-                    ["name"] = "👤 Player Info",
-                    ["value"] = string.format("**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`", displayName, username, profileUrl, userId),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "⚡ Executor",
-                    ["value"] = string.format("`%s`", executorName),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "🎮 Game Details",
-                    ["value"] = string.format("**Game:** %s\n**Place ID:** `%d`\n**Role:** `%s`", gameName, game.PlaceId, currentRole),
-                    ["inline"] = false
-                },
-                {
-                    ["name"] = "📌 Server Job ID",
-                    ["value"] = string.format("```lua\n%s\n```", (game.JobId ~= "" and game.JobId or "Singleplayer / Local")),
-                    ["inline"] = false
-                }
-            },
+			    {
+			        ["name"] = "👤 Player Info",
+			        ["value"] = string.format("**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`", displayName, username, profileUrl, userId),
+			        ["inline"] = true
+			    },
+			    {
+			        ["name"] = "⚡ Executor & Role",
+			        ["value"] = string.format("**Exec:** `%s`\n**Role:** `%s`", executorName, currentRole),
+			        ["inline"] = true
+			    },
+			    -- ⬇️ FIELD HASIL FARM BARU ⬇️
+			    {
+			        ["name"] = "📊 Farm Statistics",
+			        ["value"] = string.format(
+			            "⭐ **Level:** `%d` `(+%d)`\n" ..
+			            "🔮 **Sins:** `%d` `(+%d)`\n" ..
+			            "🔩 **Screws:** `%d` `(+%d)`\n" ..
+			            "⚙️ **Gears:** `%d` `(+%d)`",
+			            stats.Level.Current, stats.Level.Gained,
+			            stats.Sins.Current, stats.Sins.Gained,
+			            stats.Screws.Current, stats.Screws.Gained,
+			            stats.Gears.Current, stats.Gears.Gained
+			        ),
+			        ["inline"] = false
+			    },
+			    {
+			        ["name"] = "🎮 Game Details",
+			        ["value"] = string.format("**Game:** %s\n**Place ID:** `%d`", gameName, game.PlaceId),
+			        ["inline"] = false
+			    },
+			    {
+			        ["name"] = "📌 Server Job ID",
+			        ["value"] = string.format("```lua\n%s\n```", (game.JobId ~= "" and game.JobId or "Singleplayer / Local")),
+			        ["inline"] = false
+			    }
+			}
             ["footer"] = {
                 ["text"] = "VD Auto Farm System",
                 ["icon_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png"
@@ -458,6 +474,27 @@ TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, erro
         })
     end
 end)
+
+local InitialStats = {
+    Level = LocalPlayer:GetAttribute("Level") or 0,
+    Sins = LocalPlayer:GetAttribute("Sins") or 0,
+    Screws = LocalPlayer:GetAttribute("Screws") or 0,
+    Gears = LocalPlayer:GetAttribute("Gears") or 0,
+}
+
+local function GetFarmStats()
+    local curLvl = LocalPlayer:GetAttribute("Level") or 0
+    local curSins = LocalPlayer:GetAttribute("Sins") or 0
+    local curScrews = LocalPlayer:GetAttribute("Screws") or 0
+    local curGears = LocalPlayer:GetAttribute("Gears") or 0
+
+    return {
+        Level = { Current = curLvl, Gained = curLvl - InitialStats.Level },
+        Sins = { Current = curSins, Gained = curSins - InitialStats.Sins },
+        Screws = { Current = curScrews, Gained = curScrews - InitialStats.Screws },
+        Gears = { Current = curGears, Gained = curGears - InitialStats.Gears },
+    }
+end
 
 local IgnoredServers = {}
 
