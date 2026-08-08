@@ -515,7 +515,7 @@ local function ServerHop()
                 and Server.id ~= game.JobId
                 and Server.playing
                 and Server.playing >= 1
-                and Server.playing <= 3
+                and Server.playing <= 2
                 and not IgnoredServers[Server.id]
             then
 
