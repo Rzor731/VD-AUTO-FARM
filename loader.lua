@@ -15,21 +15,17 @@ Library.ForceCheckbox = false
 Library.ShowToggleFrameInKeybinds = true
 
 --==================================================
--- WINDOW
+-- WINDOW & TABS
 --==================================================
 
 local Window = Library:CreateWindow({
     Title = "",
-    Footer = "version: 1.0.0",
+    Footer = "version: 1.0.1",
     Icon = "bot",
 
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
-
---==================================================
--- TABS
---==================================================
 
 Window:SetSidebarWidth(40)
 
@@ -37,10 +33,6 @@ local Tabs = {
     AutoFarm = Window:AddTab("", "zap"),
     Settings = Window:AddTab("", "settings"),
 }
-
---==================================================
--- AUTO FARM TAB
---==================================================
 
 local AutoFarmGroup = Tabs.AutoFarm:AddLeftGroupbox("Auto Farm", "zap")
 local WebhookGroup = Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
@@ -75,7 +67,6 @@ local function GetRole()
         return "Survivor"
     end
 
-    -- Support both possible spectator team names
     if name == "Spectator" or name == "Spectators" then
         return "Spectator"
     end
@@ -242,103 +233,47 @@ local function BeatGameSurvivor()
 
     pcall(function()
 
-        --==================================================
-        -- MAP DETECTOR #1
-        -- Rooftop
-        --==================================================
-
-        if map:FindFirstChild("RooftopHitbox")
-            or map:FindFirstChild("Rooftop") then
-
-            exitPos = Vector3.new(
-                3098.16,
-                454.04,
-                -4918.74
-            )
-
+        -- MAP DETECTOR #1: Rooftop
+        if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
+            exitPos = Vector3.new(3098.16, 454.04, -4918.74)
             return
         end
 
-        --==================================================
-        -- MAP DETECTOR #2
-        -- HooksMeat
-        --==================================================
-
+        -- MAP DETECTOR #2: HooksMeat
         if map:FindFirstChild("HooksMeat") then
-
-            exitPos = Vector3.new(
-                1546.12,
-                152.21,
-                -796.72
-            )
-
+            exitPos = Vector3.new(1546.12, 152.21, -796.72)
             return
         end
 
-        --==================================================
-        -- MAP DETECTOR #3
-        -- Churchbell
-        --==================================================
-
+        -- MAP DETECTOR #3: Churchbell
         if map:FindFirstChild("churchbell") then
-
-            exitPos = Vector3.new(
-                760.98,
-                -20.14,
-                -78.48
-            )
-
+            exitPos = Vector3.new(760.98, -20.14, -78.48)
             return
         end
 
-        --==================================================
-        -- MAP DETECTOR #4
-        -- Finishline
-        --==================================================
-
-        local finish =
-            map:FindFirstChild("Finishline")
-            or map:FindFirstChild("FinishLine")
-            or map:FindFirstChild("Fininshline")
+        -- MAP DETECTOR #4: Finishline
+        local finish = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
 
         if finish then
-
             if finish:IsA("BasePart") then
-
                 exitPos = finish.Position
-
             elseif finish:IsA("Model") then
-
-                local part =
-                    finish:FindFirstChildWhichIsA("BasePart")
-
+                local part = finish:FindFirstChildWhichIsA("BasePart")
                 if part then
                     exitPos = part.Position
                 end
             end
-
             return
         end
 
-        --==================================================
-        -- MAP DETECTOR #5
-        -- Any descendant containing "finish"
-        --==================================================
-
+        -- MAP DETECTOR #5: Descendants with "finish"
         for _, obj in ipairs(map:GetDescendants()) do
-
             if obj.Name:lower():find("finish") then
-
                 if obj:IsA("BasePart") then
-
                     exitPos = obj.Position
                     break
-
                 elseif obj:IsA("Model") then
-
-                    local part =
-                        obj:FindFirstChildWhichIsA("BasePart")
-
+                    local part = obj:FindFirstChildWhichIsA("BasePart")
                     if part then
                         exitPos = part.Position
                         break
@@ -347,47 +282,21 @@ local function BeatGameSurvivor()
             end
         end
 
-        --==================================================
-        -- MAP DETECTOR #6
-        -- Limestone fallback
-        --==================================================
-
+        -- MAP DETECTOR #6: Limestone fallback
         if not exitPos then
-
             for _, obj in ipairs(map:GetDescendants()) do
-
-                if obj:IsA("MeshPart")
-                    and obj.Material == Enum.Material.Limestone then
-
-                    exitPos = Vector3.new(
-                        -947.90,
-                        152.12,
-                        -7579.52
-                    )
-
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
+                    exitPos = Vector3.new(-947.90, 152.12, -7579.52)
                     break
                 end
             end
         end
 
-        --==================================================
-        -- MAP DETECTOR #7
-        -- Leather fallback
-        --==================================================
-
+        -- MAP DETECTOR #7: Leather fallback
         if not exitPos then
-
             for _, obj in ipairs(map:GetDescendants()) do
-
-                if obj:IsA("MeshPart")
-                    and obj.Material == Enum.Material.Leather then
-
-                    exitPos = Vector3.new(
-                        1546.12,
-                        152.21,
-                        -796.72
-                    )
-
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
+                    exitPos = Vector3.new(1546.12, 152.21, -796.72)
                     break
                 end
             end
@@ -400,15 +309,9 @@ local function BeatGameSurvivor()
         return
     end
 
-    --==================================================
     -- FINISH POSITION CHANGE CHECK
-    --==================================================
-
     if BeatState.LastFinishPos then
-
-        local dist =
-            (exitPos - BeatState.LastFinishPos).Magnitude
-
+        local dist = (exitPos - BeatState.LastFinishPos).Magnitude
         if dist > 50 then
             BeatState.BeatSurvivorDone = false
         end
@@ -419,27 +322,18 @@ local function BeatGameSurvivor()
         return
     end
 
-    --==================================================
     -- TELEPORT TO FINISH
-    --==================================================
+    root.CFrame = CFrame.new(exitPos + Vector3.new(0, 3, 0))
 
-    root.CFrame = CFrame.new(
-        exitPos + Vector3.new(0, 3, 0)
-    )
-
-    --==================================================
     -- SAVE STATE & WEBHOOK NOTIFY
-    --==================================================
-
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
 
-    -- Send notification to webhook upon finishing
     SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
 end
 
 --==================================================
--- SERVER HOP
+-- SERVER HOP & TELEPORT SYSTEM
 --==================================================
 
 local IGNORE_FILE = "ServerHop.txt"
@@ -450,9 +344,9 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
 local IgnoredServers = {}
+local isHopping = false
 
 local function GetIgnoredServers()
-
     if not isfile(IGNORE_FILE) then
         return {}
     end
@@ -461,16 +355,10 @@ local function GetIgnoredServers()
     local now = os.time()
 
     for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
-
-        local serverId, timestamp =
-            line:match("([^|]+)|?(%d*)")
-
+        local serverId, timestamp = line:match("([^|]+)|?(%d*)")
         timestamp = tonumber(timestamp) or 0
 
-        if serverId
-            and serverId ~= ""
-            and now - timestamp < HOUR then
-
+        if serverId and serverId ~= "" and now - timestamp < HOUR then
             list[serverId] = timestamp
         end
     end
@@ -479,84 +367,62 @@ local function GetIgnoredServers()
 end
 
 local function UpdateIgnoredServers(list)
-
     local lines = {}
-
     for serverId, timestamp in pairs(list) do
         table.insert(lines, serverId .. "|" .. timestamp)
     end
-
-    writefile(
-        IGNORE_FILE,
-        table.concat(lines, "\n")
-    )
+    writefile(IGNORE_FILE, table.concat(lines, "\n"))
 end
 
 IgnoredServers = GetIgnoredServers()
 
---==================================================
--- SERVER HOP STATE
---==================================================
+-- TELEPORT FAIL HANDLER (Fix for Error 772 / Server Full / GameEnded)
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+    if player == Players.LocalPlayer then
+        isHopping = false
 
+        Library:Notify({
+            Title = "Teleport Failed",
+            Description = "Server full or ended. Retrying another server in 2s...",
+            Icon = "x",
+            Time = 4,
+        })
+
+        task.wait(2)
+
+        if Toggles.ServerHop and Toggles.ServerHop.Value and not Library.Unloaded do
+            task.spawn(function()
+                ServerHop()
+            end)
+        end
+    end
+end)
+
+-- SERVER HOP STATE & DETECTORS
 local IsRound = false
-
-local ReplicatedStorage =
-    game:GetService("ReplicatedStorage")
-
-local Remotes =
-    ReplicatedStorage:WaitForChild("Remotes")
-
-local StatusUpdateEvent =
-    Remotes:WaitForChild("StatusUpdateEvent")
-
-local TimeUpdateEvent =
-    Remotes:WaitForChild("TimeUpdateEvent")
-
---==================================================
--- STATUS DETECTOR
---==================================================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local StatusUpdateEvent = Remotes:WaitForChild("StatusUpdateEvent")
+local TimeUpdateEvent = Remotes:WaitForChild("TimeUpdateEvent")
 
 StatusUpdateEvent.OnClientEvent:Connect(function(Status)
-
-    if Status == "WaitingForPlayers" then
-
-        IsRound = false
-
-    elseif Status == "IntermissionStarting" then
-
-        IsRound = false
-
-    elseif Status == "Intermission" then
-
+    if Status == "WaitingForPlayers" or Status == "IntermissionStarting" or Status == "Intermission" then
         IsRound = false
     end
 end)
 
---==================================================
--- ROUND DETECTOR
---==================================================
-
 TimeUpdateEvent.OnClientEvent:Connect(function(Status)
-
     if Status == "Round" then
         IsRound = true
     end
 end)
 
---==================================================
--- SERVER HOP PERMISSION
---==================================================
-
 local function CanServerHop()
-
-    -- Must be inside a round
     if not IsRound then
         return false
     end
 
-    -- Only Spectator or Killer may serverhop during round
     local role = GetRole()
-
     if role ~= "Spectator" and role ~= "Killer" then
         return false
     end
@@ -564,27 +430,23 @@ local function CanServerHop()
     return true
 end
 
---==================================================
--- SERVER HOP
---==================================================
-
+-- MAIN SERVER HOP FUNCTION
 local function ServerHop()
+    if isHopping then return end
+    isHopping = true
 
     local cursor = ""
 
-    while Toggles.ServerHop.Value
-        and not Library.Unloaded do
+    while Toggles.ServerHop.Value and not Library.Unloaded do
 
-        -- Check current round + current role LIVE
         if not CanServerHop() then
+            isHopping = false
             task.wait(0.5)
             continue
         end
 
         local success, result = pcall(function()
-
-            local url =
-                "https://games.roblox.com/v1/games/"
+            local url = "https://games.roblox.com/v1/games/"
                 .. game.PlaceId
                 .. "/servers/Public?limit=100"
                 .. "&sortOrder=Asc"
@@ -592,121 +454,95 @@ local function ServerHop()
                 .. "&cursor="
                 .. cursor
 
-            return HttpService:JSONDecode(
-                game:HttpGet(url)
-            )
+            return HttpService:JSONDecode(game:HttpGet(url))
         end)
 
-        if not success
-            or not result
-            or not result.data then
-
+        if not success or not result or not result.data then
             task.wait(3)
             continue
         end
 
         local ServersList = result.data
 
-        --==================================================
-        -- PRIORITY: LOWEST PING
-        --==================================================
-
+        -- Sort Priority: Lowest Ping
         table.sort(ServersList, function(a, b)
-
-            return
-                (a.ping or math.huge)
-                <
-                (b.ping or math.huge)
+            return (a.ping or math.huge) < (b.ping or math.huge)
         end)
 
-        --==================================================
-        -- FIND SERVER
-        --==================================================
-
+        -- Find Available Server
         for _, Server in ipairs(ServersList) do
 
-            -- Check again before teleporting
             if not CanServerHop() then
                 break
             end
 
+            local maxPlayers = Server.maxPlayers or 10
+            local playing = Server.playing or 0
+            local freeSlots = maxPlayers - playing
+
             if
                 Server.id
                 and Server.id ~= game.JobId
-                and Server.playing
-                and Server.playing >= 1
-                and Server.playing <= 2
+                and playing >= 1
+                and playing <= 2
+                and freeSlots >= 1
                 and not IgnoredServers[Server.id]
             then
 
-                -- Mark server before teleport
                 IgnoredServers[Server.id] = os.time()
+                UpdateIgnoredServers(IgnoredServers)
 
-                UpdateIgnoredServers(
-                    IgnoredServers
-                )
+                SendDiscordWebhook("🔄 Server Hopping", "Hopping to server: `" .. Server.id .. "`")
 
-                -- Send Server Hop notification via Webhook
-                SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
+                local tpSuccess = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(
+                        game.PlaceId,
+                        Server.id,
+                        Players.LocalPlayer
+                    )
+                end)
 
-                TeleportService:TeleportToPlaceInstance(
-                    game.PlaceId,
-                    Server.id,
-                    Players.LocalPlayer
-                )
+                if tpSuccess then
+                    task.wait(8)
+                end
 
+                isHopping = false
                 return
             end
         end
 
-        --==================================================
-        -- NEXT PAGE
-        --==================================================
-
         cursor = result.nextPageCursor
 
         if not cursor then
-
-            -- Start pagination again
             cursor = ""
-
             task.wait(1)
         else
-
             task.wait(0.2)
         end
     end
+
+    isHopping = false
 end
 
 --==================================================
--- AUTO FARM TOGGLE
+-- AUTO FARM TOGGLES
 --==================================================
 
 AutoFarmGroup:AddToggle("EnableAutoFarm", {
     Text = "Enable Auto Farm",
     Tooltip = "Teleport Survivor to the detected finish location",
-
     Default = false,
 })
-
---==================================================
--- AUTO SERVERHOP
---==================================================
 
 AutoFarmGroup:AddToggle("ServerHop", {
     Text = "Server Hop",
     Tooltip = "Hop to 1-2 player servers as Spectator",
-
     Default = false,
-
     Callback = function(Value)
-
         if Value then
-
             task.spawn(function()
                 ServerHop()
             end)
-
         end
     end,
 })
@@ -715,9 +551,7 @@ AutoFarmGroup:AddToggle("ServerHop", {
 -- AUTO EXECUTE
 --==================================================
 
-local LOADER_URL =
-    "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
-
+local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
 local AutoExecuteQueued = false
 
 local function QueueAutoExecute()
@@ -735,13 +569,10 @@ local function QueueAutoExecute()
             Description = "queue_on_teleport is not available.",
             Time = 5,
         })
-
         return
     end
 
-    local queued = string.format([[
-loadstring(game:HttpGet(%q))()
-]], LOADER_URL)
+    local queued = string.format([[loadstring(game:HttpGet(%q))()]], LOADER_URL)
 
     local success, err = pcall(function()
         queue_on_teleport(queued)
@@ -749,7 +580,6 @@ loadstring(game:HttpGet(%q))()
 
     if success then
         AutoExecuteQueued = true
-
         Library:Notify({
             Title = "Auto Execute   \n",
             Description = "Script queued for the next teleport.",
@@ -767,9 +597,7 @@ end
 AutoFarmGroup:AddToggle("AutoExecute", {
     Text = "Auto Execute",
     Tooltip = "Automatically execute the script after server hop",
-
     Default = false,
-
     Callback = function(Value)
         if Value then
             QueueAutoExecute()
@@ -786,16 +614,13 @@ AutoFarmGroup:AddToggle("AutoExecute", {
 WebhookGroup:AddToggle("EnableWebhook", {
     Text = "Enable Webhook",
     Tooltip = "Enable webhook notifications",
-
     Default = false,
 })
 
 WebhookGroup:AddInput("WebhookLink", {
     Text = "Webhook Link",
-
     Default = "",
     Placeholder = "Enter webhook URL...",
-
     Numeric = false,
     Finished = false,
     ClearTextOnFocus = false,
@@ -825,8 +650,7 @@ end)
 -- TEST NOTIFICATIONS
 --==================================================
 
-local TestNotificationGroup =
-    Tabs.AutoFarm:AddRightGroupbox("Test Notifications", "bell")
+local TestNotificationGroup = Tabs.AutoFarm:AddRightGroupbox("Test Notifications", "bell")
 
 TestNotificationGroup:AddButton("1. Simple", function()
     Library:Notify({
@@ -908,13 +732,11 @@ end)
 -- SETTINGS
 --==================================================
 
-local MenuGroup =
-    Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
+local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", {
     Default = Library.KeybindFrame.Visible,
     Text = "Open Keybind Menu",
-
     Callback = function(Value)
         Library.KeybindFrame.Visible = Value
     end,
@@ -923,45 +745,26 @@ MenuGroup:AddToggle("KeybindMenuOpen", {
 MenuGroup:AddToggle("ShowCustomCursor", {
     Text = "Custom Cursor",
     Default = Library.ShowCustomCursor,
-
     Callback = function(Value)
         Library.ShowCustomCursor = Value
     end,
 })
 
 MenuGroup:AddDropdown("NotificationSide", {
-    Values = {
-        "Left",
-        "Right",
-    },
-
+    Values = { "Left", "Right" },
     Default = "Right",
     Text = "Notification Side",
-
     Callback = function(Value)
         Library:SetNotifySide(Value)
     end,
 })
 
 MenuGroup:AddDropdown("DPIDropdown", {
-    Values = {
-        "50%",
-        "75%",
-        "100%",
-        "125%",
-        "150%",
-        "175%",
-        "200%",
-    },
-
+    Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
     Default = "100%",
     Text = "DPI Scale",
-
     Callback = function(Value)
-
-        local DPI =
-            tonumber(Value:gsub("%%", ""))
-
+        local DPI = tonumber(Value:gsub("%%", ""))
         if DPI then
             Library:SetDPIScale(DPI)
         end
@@ -970,12 +773,10 @@ MenuGroup:AddDropdown("DPIDropdown", {
 
 MenuGroup:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
-
     Default = Library.CornerRadius,
     Min = 0,
     Max = 20,
     Rounding = 0,
-
     Callback = function(Value)
         Window:SetCornerRadius(Value)
     end,
@@ -1008,10 +809,7 @@ SaveManager:SetFolder("AutoFarm")
 SaveManager:SetSubFolder("Settings")
 
 SaveManager:IgnoreThemeSettings()
-
-SaveManager:SetIgnoreIndexes({
-    "MenuKeybind",
-})
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 
 SaveManager:BuildConfigSection(Tabs.Settings)
 ThemeManager:ApplyToTab(Tabs.Settings)
@@ -1024,7 +822,6 @@ SaveManager:LoadAutoloadConfig()
 
 QueueAutoExecute()
 
--- Send execution log if webhook is enabled on load
 task.spawn(function()
     task.wait(2) -- Wait for UI Config to auto load
     SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
@@ -1035,14 +832,10 @@ end)
 --==================================================
 
 task.spawn(function()
-
     while not Library.Unloaded do
-
         pcall(function()
             BeatGameSurvivor()
         end)
-
         task.wait(0.1)
     end
-
 end)
