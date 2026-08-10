@@ -862,47 +862,6 @@ local function ServerHop()
 end
 
 --==================================================
--- RETRY STATISTICS UI (Optional)
---==================================================
-
--- Tambahkan ke Settings tab untuk monitoring
-local RetryStatsGroup = Tabs.Settings:AddRightGroupbox("Retry Statistics", "refresh-cw")
-
-local function UpdateRetryStats()
-    while not Library.Unloaded do
-        local statsText = string.format(
-            "Retries: %d\nFailures: %d\nCooldown: %s\nFailed Servers: %d",
-            RetryState.CurrentRetries,
-            RetryState.ConsecutiveFailures,
-            RetryState.IsInCooldown and "Yes" or "No",
-            #RetryState.FailedServers -- Count of failed servers
-        )
-        
-        -- Update UI jika ada label (opsional)
-        if RetryStatsLabel then
-            RetryStatsLabel:SetText(statsText)
-        end
-        
-        task.wait(1)
-    end
-end
-
--- Start stats updater
-task.spawn(UpdateRetryStats)
-
---==================================================
--- EXPORT FUNGSI UNTUK EXTERNAL USE
---==================================================
-
-return {
-    ServerHop = ServerHop,
-    TeleportWithRetry = TeleportWithRetry,
-    RetryState = RetryState,
-    RetryConfig = RetryConfig,
-    CleanFailedServers = CleanFailedServers,
-}
-
---==================================================
 -- AUTO FARM TOGGLE
 --==================================================
 
@@ -1253,3 +1212,11 @@ task.spawn(function()
         task.wait(0.1)
     end
 end)
+
+return {
+    ServerHop = ServerHop,
+    TeleportWithRetry = TeleportWithRetry,
+    RetryState = RetryState,
+    RetryConfig = RetryConfig,
+    CleanFailedServers = CleanFailedServers,
+}
