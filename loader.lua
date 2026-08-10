@@ -608,18 +608,6 @@ local function ServerHop()
         local ServersList = result.data
 
         --==================================================
-        -- PRIORITY: LOWEST PING
-        --==================================================
-
-        table.sort(ServersList, function(a, b)
-
-            return
-                (a.ping or math.huge)
-                <
-                (b.ping or math.huge)
-        end)
-
-        --==================================================
         -- FIND SERVER
         --==================================================
 
