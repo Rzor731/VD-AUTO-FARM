@@ -86,83 +86,246 @@ end
 --==================================================
 -- WEBHOOK SYSTEM
 --==================================================
+
 local function SendDiscordWebhook(customTitle, customDesc, forceSend)
+
     if not forceSend and (not Toggles.EnableWebhook or not Toggles.EnableWebhook.Value) then
         return false, "Webhook Disabled"
     end
+
     local webhookUrl = Options.WebhookLink and Options.WebhookLink.Value or ""
-    if not webhookUrl or webhookUrl == "" or not string.find(webhookUrl, "discord.com/api/webhooks") then
+
+    if not webhookUrl
+        or webhookUrl == ""
+        or not string.find(webhookUrl, "discord.com/api/webhooks") then
         return false, "Invalid Webhook URL"
     end
+
     local HttpService = game:GetService("HttpService")
     local Players = game:GetService("Players")
     local MarketplaceService = game:GetService("MarketplaceService")
     local LocalPlayer = Players.LocalPlayer
+
+    --==================================================
+    -- GAME INFO
+    --==================================================
+
     local gameName = "Unknown Game"
+
     pcall(function()
         gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
     end)
+
+    --==================================================
+    -- PLAYER INFO
+    --==================================================
+
     local username = LocalPlayer.Name
     local displayName = LocalPlayer.DisplayName
     local userId = LocalPlayer.UserId
-    local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
-    local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
+
+    local profileUrl =
+        "https://www.roblox.com/users/" .. userId .. "/profile"
+
+    local avatarUrl =
+        "https://www.roblox.com/headshot-thumbnail/image?userId="
+        .. userId
+        .. "&width=420&height=420&format=png"
+
+    --==================================================
+    -- ATTRIBUTES
+    --==================================================
+
+    local attrs = LocalPlayer:GetAttributes()
+
+    local Level = attrs.Level
+    local KillerChance = attrs.KillerChance
+    local Screws = attrs.Screws
+    local Gears = attrs.Gears
+
+    --==================================================
+    -- OTHER INFO
+    --==================================================
+
     local executorName = GetExecutorName()
     local currentRole = GetRole()
-    local timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+
+    local timestamp =
+        os.date("!%Y-%m-%dT%H:%M:%SZ")
+
+    --==================================================
+    -- PAYLOAD
+    --==================================================
+
     local payload = {
+
         ["username"] = "VD Auto Farm Logger",
-        ["avatar_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
+
+        ["avatar_url"] =
+            "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
+
         ["embeds"] = {{
-            ["title"] = customTitle or "🚀 VD Auto Farm Notification",
-            ["description"] = customDesc or "Notification trigger from **VD Auto Farm Loader**.",
+
+            ["title"] =
+                customTitle
+                or "🚀 VD Auto Farm Notification",
+
+            ["description"] =
+                customDesc
+                or "Notification trigger from **VD Auto Farm Loader**.",
+
             ["color"] = 5793266,
+
             ["timestamp"] = timestamp,
+
             ["thumbnail"] = {
                 ["url"] = avatarUrl
             },
+
+            --==================================================
+            -- FIELDS
+            --==================================================
+
             ["fields"] = {
+
+                -- PLAYER INFO
                 {
                     ["name"] = "👤 Player Info",
-                    ["value"] = string.format("**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`", displayName, username, profileUrl, userId),
+
+                    ["value"] = string.format(
+                        "**Display:** %s\n**Username:** %s\n**User ID:** `%d`",
+                        displayName,
+                        username,
+                        userId
+                    ),
+
                     ["inline"] = true
                 },
+
+                -- EXECUTOR
                 {
                     ["name"] = "⚡ Executor",
-                    ["value"] = string.format("`%s`", executorName),
+
+                    ["value"] =
+                        string.format("`%s`", executorName),
+
                     ["inline"] = true
                 },
+
+                --==================================================
+                -- ATTRIBUTE DATA
+                --==================================================
+
+                {
+                    ["name"] = "📊 Data Atribut",
+
+                    ["value"] = string.format(
+                        "**📈 Level:** `%s`\n" ..
+                        "**🔪 KillerChance:** `%s`\n" ..
+                        "**🔩 Screws:** `%s`\n" ..
+                        "**⚙️ Gears:** `%s`",
+
+                        tostring(Level or "Tidak tersedia"),
+                        tostring(KillerChance or "Tidak tersedia"),
+                        tostring(Screws or "Tidak tersedia"),
+                        tostring(Gears or "Tidak tersedia")
+                    ),
+
+                    ["inline"] = true
+                },
+
+                -- GAME DETAILS
                 {
                     ["name"] = "🎮 Game Details",
-                    ["value"] = string.format("**Game:** %s\n**Place ID:** `%d`\n**Role:** `%s`", gameName, game.PlaceId, currentRole),
-                    ["inline"] = false
+
+                    ["value"] = string.format(
+                        "**Game:** %s\n" ..
+                        "**Place ID:** `%d`\n" ..
+                        "**Role:** `%s`",
+
+                        gameName,
+                        game.PlaceId,
+                        currentRole
+                    ),
+
+                    ["inline"] = true
                 },
+
+                -- SERVER
                 {
                     ["name"] = "📌 Server Job ID",
-                    ["value"] = string.format("```lua\n%s\n```", (game.JobId ~= "" and game.JobId or "Singleplayer / Local")),
+
+                    ["value"] = string.format(
+                        "```lua\n%s\n```",
+                        (
+                            game.JobId ~= ""
+                            and game.JobId
+                            or "Singleplayer / Local"
+                        )
+                    ),
+
                     ["inline"] = false
                 }
+
             },
+
+            --==================================================
+            -- FOOTER
+            --==================================================
+
             ["footer"] = {
+
                 ["text"] = "VD Auto Farm System",
-                ["icon_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png"
+
+                ["icon_url"] =
+                    "https://cdn-icons-png.flaticon.com/512/2092/2092663.png"
+
             }
+
         }}
+
     }
+
+    --==================================================
+    -- SEND REQUEST
+    --==================================================
+
     local response = safeRequest({
+
         Url = webhookUrl,
+
         Method = "POST",
+
         Headers = {
             ["Content-Type"] = "application/json"
         },
+
         Body = HttpService:JSONEncode(payload)
+
     })
-    if response and (response.StatusCode == 200 or response.StatusCode == 204) then
+
+    --==================================================
+    -- RESPONSE
+    --==================================================
+
+    if response
+        and (response.StatusCode == 200
+        or response.StatusCode == 204) then
+
         return true, "Webhook successfully sent!"
+
     else
-        local status = response and response.StatusCode or "No Response / Failed Request"
-        return false, "Failed Status: " .. tostring(status)
+
+        local status =
+            response
+            and response.StatusCode
+            or "No Response / Failed Request"
+
+        return false,
+            "Failed Status: " .. tostring(status)
+
     end
+
 end
 --==================================================
 -- BEAT GAME SURVIVOR
