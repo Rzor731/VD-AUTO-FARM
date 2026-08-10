@@ -238,6 +238,16 @@ local function BeatGameSurvivor()
     if GetRole() ~= "Survivor" then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
+
+        print("Gagal TP: Role kamu adalah " .. tostring(role))
+        return
+    end
+
+    local role = GetRole()
+    if role ~= "Survivor" then
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
+        print("Gagal TP: Role kamu adalah " .. tostring(role))
         return
     end
 
@@ -375,9 +385,11 @@ local function BeatGameSurvivor()
         return
     end
 
-    if GetRole() ~= "Survivor" then
+    local role = GetRole()
+    if role ~= "Survivor" then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
+        print("Gagal TP: Role kamu adalah " .. tostring(role))
         return
     end
 
