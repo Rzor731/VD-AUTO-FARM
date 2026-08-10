@@ -629,6 +629,47 @@ local function TeleportWithRetry(serverId, maxRetries)
     return false, "Max retries exceeded"
 end
 
+--==================================================
+-- SERVER HOP RETRY STATE
+--==================================================
+
+local function ServerHopWithRetry()
+    if RetryState.IsInCooldown then
+        local timeSinceLastAttempt =
+            os.time() - RetryState.LastAttemptTime
+
+        if timeSinceLastAttempt < RetryConfig.CooldownPeriod then
+            local remainingCooldown =
+                RetryConfig.CooldownPeriod - timeSinceLastAttempt
+
+            print(string.format(
+                "[DEBUG ServerHop] ⏳ Cooldown aktif: %ds tersisa",
+                remainingCooldown
+            ))
+
+            Library:Notify({
+                Title = "Cooldown Active",
+                Description = string.format(
+                    "Too many failures. Cooling down... (%ds remaining)",
+                    remainingCooldown
+                ),
+                Time = 3,
+            })
+
+            return false
+        end
+
+        RetryState.IsInCooldown = false
+        RetryState.ConsecutiveFailures = 0
+
+        print("[DEBUG ServerHop] ✅ Cooldown selesai.")
+    end
+
+    CleanFailedServers()
+
+    return true
+end
+
 -- 4. FUNGSI UTAMA SERVER HOP DENGAN DEBUG
 local function ServerHop()
     local cursor = ""
