@@ -129,10 +129,9 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     --==================================================
     -- PLAYER INFO
     --==================================================
-    local displayName =
-        LocalPlayer.DisplayName
-    local userId =
-        LocalPlayer.UserId
+    local displayName = LocalPlayer.DisplayName
+	local serverId = game.JobId or "Singleplayer"
+    local userId =LocalPlayer.UserId
     local profileUrl =
         "https://www.roblox.com/users/"
         .. userId
@@ -230,7 +229,12 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
                             GearsDelta
                         ),
                     ["inline"] = false
-                }
+                },
+				{
+	                ["name"] = "🆔 Server ID",
+	                ["value"] = string.format("```\n%s\n```", serverId),
+	                ["inline"] = false
+	            }
             },
             ["footer"] = {
                 ["text"] = "VD Auto Farm"
@@ -755,6 +759,6 @@ task.spawn(function()
         pcall(function()
             BeatGameSurvivor()
         end)
-        task.wait(0.1)
+        task.wait(1)
     end
 end)
