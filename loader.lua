@@ -237,7 +237,7 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
 	            }
             },
             ["footer"] = {
-                ["text"] = "VD Auto Farm"
+                ["text"] = string.format("VD Auto Farm · %s", GetExecutorName())
             },
             ["timestamp"] =
                 os.date("!%Y-%m-%dT%H:%M:%S.000Z")
