@@ -402,7 +402,7 @@ local function BeatGameSurvivor()
     )
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
-    SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
+    SendDiscordWebhook()
 end
 --==================================================
 -- SERVER HOP
@@ -534,7 +534,7 @@ local function ServerHop()
                 UpdateIgnoredServers(
                     IgnoredServers
                 )
-                SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
+                -- SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
                     Server.id,
@@ -745,7 +745,7 @@ SaveManager:LoadAutoloadConfig()
 QueueAutoExecute()
 task.spawn(function()
     task.wait(2)
-    SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
+    -- SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
 end)
 --==================================================
 -- MAIN LOOP
