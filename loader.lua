@@ -944,28 +944,17 @@ MenuGroup:AddDropdown("NotificationSide", {
 })
 
 MenuGroup:AddDropdown("DPIDropdown", {
-    Values = {
-        "50%",
-        "75%",
-        "100%",
-        "125%",
-        "150%",
-        "175%",
-        "200%",
-    },
+	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+	Default = "100%",
 
-    Default = "100%",
-    Text = "DPI Scale",
+	Text = "DPI Scale",
 
-    Callback = function(Value)
+	Callback = function(Value)
+		Value = Value:gsub("%%", "")
+		local DPI = tonumber(Value)
 
-        local DPI =
-            tonumber(Value:gsub("%%", ""))
-
-        if DPI then
-            Library:SetDPIScale(DPI)
-        end
-    end,
+		Library:SetDPIScale(DPI)
+	end,
 })
 
 MenuGroup:AddSlider("UICornerSlider", {
