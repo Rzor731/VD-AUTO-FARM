@@ -52,6 +52,9 @@ local WebhookGroup = Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
 local BeatState = {
     LastFinishPos = nil,
     BeatSurvivorDone = false,
+
+    FinishPending = false,
+    FinishPendingSince = 0,
 }
 
 --==================================================
@@ -217,11 +220,15 @@ local function BeatGameSurvivor()
     if not Toggles.EnableAutoFarm.Value then
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
         return
     end
 
     -- Only Survivor
     if GetRole() ~= "Survivor" then
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
         return
     end
 
@@ -397,6 +404,8 @@ local function BeatGameSurvivor()
 
     -- No exit detected
     if not exitPos then
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
         return
     end
 
@@ -416,6 +425,55 @@ local function BeatGameSurvivor()
 
     -- Already completed this location
     if BeatState.BeatSurvivorDone then
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
+        return
+    end
+
+    --==================================================
+    -- START 5 SECOND COUNTDOWN
+    --==================================================
+
+    if not BeatState.FinishPending then
+
+        BeatState.FinishPending = true
+        BeatState.FinishPendingSince = os.clock()
+
+        return
+    end
+
+    -- Still waiting
+    if os.clock() - BeatState.FinishPendingSince < 5 then
+        return
+    end
+
+    --==================================================
+    -- RE-CHECK BEFORE TELEPORT
+    --==================================================
+
+    if not Toggles.EnableAutoFarm.Value then
+
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
+
+        return
+    end
+
+    if GetRole() ~= "Survivor" then
+
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
+
+        return
+    end
+
+    local currentRoot = GetCharacterRoot()
+
+    if not currentRoot then
+
+        BeatState.FinishPending = false
+        BeatState.FinishPendingSince = 0
+
         return
     end
 
@@ -423,19 +481,21 @@ local function BeatGameSurvivor()
     -- TELEPORT TO FINISH
     --==================================================
 
-    root.CFrame = CFrame.new(
+    currentRoot.CFrame = CFrame.new(
         exitPos + Vector3.new(0, 3, 0)
     )
 
     --==================================================
-    -- SAVE STATE & WEBHOOK NOTIFY
+    -- SAVE STATE
     --==================================================
 
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
 
-    -- Send notification to webhook upon finishing
-    SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
+    BeatState.FinishPending = false
+    BeatState.FinishPendingSince = 0
+
+	SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
 end
 
 --==================================================
@@ -483,7 +543,10 @@ local function UpdateIgnoredServers(list)
     local lines = {}
 
     for serverId, timestamp in pairs(list) do
-        table.insert(lines, serverId .. "|" .. timestamp)
+        table.insert(
+            lines,
+            serverId .. "|" .. timestamp
+        )
     end
 
     writefile(
@@ -513,6 +576,16 @@ local TimeUpdateEvent =
     Remotes:WaitForChild("TimeUpdateEvent")
 
 --==================================================
+-- SERVER HOP DELAY STATE
+--==================================================
+
+local ServerHopPending = false
+local ServerHopPendingSince = 0
+
+local SERVER_HOP_DELAY = 2
+local MAX_SERVER_PLAYERS = 2
+
+--==================================================
 -- STATUS DETECTOR
 --==================================================
 
@@ -522,13 +595,22 @@ StatusUpdateEvent.OnClientEvent:Connect(function(Status)
 
         IsRound = false
 
+        ServerHopPending = false
+        ServerHopPendingSince = 0
+
     elseif Status == "IntermissionStarting" then
 
         IsRound = false
 
+        ServerHopPending = false
+        ServerHopPendingSince = 0
+
     elseif Status == "Intermission" then
 
         IsRound = false
+
+        ServerHopPending = false
+        ServerHopPendingSince = 0
     end
 end)
 
@@ -549,17 +631,76 @@ end)
 
 local function CanServerHop()
 
-    -- Must be inside a round
-    if not IsRound then
-        return false
-    end
-
-    -- Only Spectator or Killer may serverhop during round
+    -- Survivor is handled by AutoFarm
     local role = GetRole()
 
-    if role ~= "Spectator" and role ~= "Killer" then
+    if role == "Survivor" then
         return false
     end
+
+    -- Killer can hop during round
+    if role == "Killer" then
+
+        if IsRound then
+            return true
+        end
+
+        return false
+    end
+
+    -- Spectator can only hop if round is active
+    if role == "Spectator" then
+
+        if IsRound then
+            return true
+        end
+
+        return false
+    end
+
+    return false
+end
+
+--==================================================
+-- SERVER HOP DELAY
+--==================================================
+
+local function WaitForServerHopDelay()
+
+    -- Start countdown
+    if not ServerHopPending then
+
+        ServerHopPending = true
+        ServerHopPendingSince = os.clock()
+
+        return false
+    end
+
+    -- Still waiting for 2 seconds
+    if os.clock() - ServerHopPendingSince < SERVER_HOP_DELAY then
+        return false
+    end
+
+    -- Re-check condition after 2 seconds
+    if not Toggles.ServerHop.Value then
+
+        ServerHopPending = false
+        ServerHopPendingSince = 0
+
+        return false
+    end
+
+    if not CanServerHop() then
+
+        ServerHopPending = false
+        ServerHopPendingSince = 0
+
+        return false
+    end
+
+    -- Delay completed and condition is still valid
+    ServerHopPending = false
+    ServerHopPendingSince = 0
 
     return true
 end
@@ -568,239 +709,414 @@ end
 -- SERVER HOP DENGAN RETRY MECHANISM
 --==================================================
 
--- Konfigurasi Retry
 local RetryConfig = {
-    MaxRetries = 3,              -- Maksimum percobaan per server
-    RetryDelay = 2,              -- Delay antar retry (detik)
-    BackoffMultiplier = 1.5,    -- Pengali delay untuk exponential backoff
-    MaxConsecutiveFailures = 5,  -- Maksimum kegagalan berturut-turut
-    CooldownPeriod = 30,        -- Cooldown setelah max failures (detik)
+    MaxRetries = 3,
+    RetryDelay = 2,
+    BackoffMultiplier = 1.5,
+    MaxConsecutiveFailures = 5,
+    CooldownPeriod = 30,
 }
 
--- State untuk tracking retry
 local RetryState = {
     CurrentRetries = 0,
     ConsecutiveFailures = 0,
-    FailedServers = {},         -- Track server yang gagal dengan timestamp
+    FailedServers = {},
     LastAttemptTime = 0,
     IsInCooldown = false,
 }
 
--- Clear failed servers yang sudah expired (lebih dari 5 menit)
+--==================================================
+-- CLEAN FAILED SERVERS
+--==================================================
+
 local function CleanFailedServers()
+
     local now = os.time()
-    local expiredTime = 300 -- 5 menit
-    
-    for serverId, timestamp in pairs(RetryState.FailedServers) do
+    local expiredTime = 300
+
+    for serverId, timestamp
+        in pairs(RetryState.FailedServers) do
+
         if now - timestamp > expiredTime then
             RetryState.FailedServers[serverId] = nil
         end
     end
 end
 
--- Check apakah server available untuk dicoba
+--==================================================
+-- CHECK SERVER AVAILABILITY
+--==================================================
+
 local function IsServerAvailable(serverId)
-    -- Check di ignored servers
+
     if IgnoredServers[serverId] then
         return false, "Server already ignored"
     end
-    
-    -- Check di failed servers yang masih dalam cooldown
+
     if RetryState.FailedServers[serverId] then
-        local timeSinceFailure = os.time() - RetryState.FailedServers[serverId]
-        if timeSinceFailure < 60 then -- 1 menit cooldown
+
+        local timeSinceFailure =
+            os.time()
+            - RetryState.FailedServers[serverId]
+
+        if timeSinceFailure < 60 then
             return false, "Server in cooldown period"
         end
     end
-    
+
     return true, nil
 end
 
--- Fungsi teleport dengan retry
+--==================================================
+-- TELEPORT WITH RETRY
+--==================================================
+
 local function TeleportWithRetry(serverId, maxRetries)
+
     local retryCount = 0
     local currentDelay = RetryConfig.RetryDelay
-    
+
     while retryCount <= maxRetries do
+
         if retryCount > 0 then
+
             Library:Notify({
                 Title = "Retry Attempt",
-                Description = string.format("Retry %d/%d for server %s (Delay: %.1fs)", 
-                    retryCount, maxRetries, serverId, currentDelay),
+
+                Description = string.format(
+                    "Retry %d/%d for server %s (Delay: %.1fs)",
+                    retryCount,
+                    maxRetries,
+                    serverId,
+                    currentDelay
+                ),
+
                 Time = 3,
             })
-            
-            -- Exponential backoff
+
             task.wait(currentDelay)
-            currentDelay = currentDelay * RetryConfig.BackoffMultiplier
+
+            currentDelay =
+                currentDelay
+                * RetryConfig.BackoffMultiplier
         end
-        
-        local success, errorResult = pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                game.PlaceId,
-                serverId,
-                Players.LocalPlayer
-            )
-        end)
-        
+
+        local success, errorResult =
+            pcall(function()
+
+                TeleportService:TeleportToPlaceInstance(
+                    game.PlaceId,
+                    serverId,
+                    Players.LocalPlayer
+                )
+            end)
+
         if success then
             return true, "Teleport successful"
+
         else
-            retryCount = retryCount + 1
-            RetryState.CurrentRetries = retryCount
-            
-            -- Log error detail
-            local errorMsg = tostring(errorResult)
-            
-            -- Check specific error types
-            if errorMsg:find("TeleportThrottled") or errorMsg:find("TooManyRequests") then
-                -- Rate limited, perlu delay lebih lama
-                currentDelay = math.max(currentDelay, 5)
+
+            retryCount =
+                retryCount + 1
+
+            RetryState.CurrentRetries =
+                retryCount
+
+            local errorMsg =
+                tostring(errorResult)
+
+            if errorMsg:find("TeleportThrottled")
+                or errorMsg:find("TooManyRequests") then
+
+                currentDelay =
+                    math.max(currentDelay, 5)
+
                 Library:Notify({
                     Title = "Rate Limited",
-                    Description = "Teleport throttled, increasing delay...",
+                    Description =
+                        "Teleport throttled, increasing delay...",
                     Time = 3,
                 })
-            elseif errorMsg:find("ServerFull") or errorMsg:find("ServerClosed") then
-                -- Server penuh atau tutup, no need to retry
+
+            elseif errorMsg:find("ServerFull")
+                or errorMsg:find("ServerClosed") then
+
                 return false, "Server full or closed"
-            elseif errorMsg:find("NetworkError") or errorMsg:find("Timeout") then
-                -- Network issue, akan retry
+
+            elseif errorMsg:find("NetworkError")
+                or errorMsg:find("Timeout") then
+
                 Library:Notify({
                     Title = "Network Error",
-                    Description = "Connection issue, retrying...",
+                    Description =
+                        "Connection issue, retrying...",
                     Time = 3,
                 })
             end
         end
     end
-    
+
     return false, "Max retries exceeded"
 end
 
--- Main Server Hop dengan Retry Logic
+--==================================================
+-- SERVER HOP RETRY STATE
+--==================================================
+
 local function ServerHopWithRetry()
-    -- Check jika dalam cooldown
+
     if RetryState.IsInCooldown then
-        local timeSinceLastAttempt = os.time() - RetryState.LastAttemptTime
-        if timeSinceLastAttempt < RetryConfig.CooldownPeriod then
-            local remainingCooldown = RetryConfig.CooldownPeriod - timeSinceLastAttempt
+
+        local timeSinceLastAttempt =
+            os.time()
+            - RetryState.LastAttemptTime
+
+        if timeSinceLastAttempt
+            < RetryConfig.CooldownPeriod then
+
+            local remainingCooldown =
+                RetryConfig.CooldownPeriod
+                - timeSinceLastAttempt
+
             Library:Notify({
                 Title = "Cooldown Active",
-                Description = string.format("Too many failures. Cooling down... (%ds remaining)", remainingCooldown),
+
+                Description = string.format(
+                    "Too many failures. Cooling down... (%ds remaining)",
+                    remainingCooldown
+                ),
+
                 Time = 3,
             })
+
             return false
         else
+
             RetryState.IsInCooldown = false
             RetryState.ConsecutiveFailures = 0
         end
     end
-    
-    -- Clean old failed servers
+
     CleanFailedServers()
-    
+
     return true
 end
 
--- Modified Server Hop Function dengan Retry
+--==================================================
+-- MAIN SERVER HOP
+--==================================================
+
 local function ServerHop()
+
     local cursor = ""
     local attemptCount = 0
-    
-    while Toggles.ServerHop.Value and not Library.Unloaded do
-        -- Check cooldown
+
+    while Toggles.ServerHop.Value
+        and not Library.Unloaded do
+
+        --==================================================
+        -- CHECK RETRY COOLDOWN
+        --==================================================
+
         if not ServerHopWithRetry() then
+
             task.wait(1)
-        -- Check current round + current role
+
+        --==================================================
+        -- CHECK ROLE / ROUND
+        --==================================================
+
         elseif not CanServerHop() then
-            task.wait(0.5)
+
+            -- Condition not valid.
+            -- Cancel any existing 2-second countdown.
+
+            ServerHopPending = false
+            ServerHopPendingSince = 0
+
+            task.wait(0.1)
+
+        --==================================================
+        -- WAIT 2 SECONDS BEFORE HOP
+        --==================================================
+
+        elseif not WaitForServerHopDelay() then
+
+            task.wait(0.1)
+
+        --==================================================
+        -- READY TO SEARCH SERVER
+        --==================================================
+
         else
-            attemptCount = attemptCount + 1
-            
-            local success, result = pcall(function()
-                local url = "https://games.roblox.com/v1/games/"
-                    .. game.PlaceId
-                    .. "/servers/Public?limit=100"
-                    .. "&sortOrder=Asc"
-                    .. "&excludeFullGames=true"
-                    .. "&cursor=" .. cursor
-                
-                return HttpService:JSONDecode(game:HttpGet(url))
-            end)
-            
-            if not success or not result or not result.data then
+
+            attemptCount =
+                attemptCount + 1
+
+            local success, result =
+                pcall(function()
+
+                    local url =
+                        "https://games.roblox.com/v1/games/"
+                        .. game.PlaceId
+                        .. "/servers/Public?limit=100"
+                        .. "&sortOrder=Asc"
+                        .. "&excludeFullGames=true"
+                        .. "&cursor=" .. cursor
+
+                    return HttpService:JSONDecode(
+                        game:HttpGet(url)
+                    )
+                end)
+
+            if not success
+                or not result
+                or not result.data then
+
                 Library:Notify({
                     Title = "API Error",
-                    Description = "Failed to fetch servers. Retrying...",
+                    Description =
+                        "Failed to fetch servers. Retrying...",
                     Time = 3,
                 })
+
                 task.wait(3)
+
             else
-                local ServersList = result.data
+
+                local ServersList =
+                    result.data
+
                 local serverFound = false
-                
-                -- Cari server yang valid
-                for _, Server in ipairs(ServersList) do
+
+                --==================================================
+                -- SEARCH VALID SERVER
+                --==================================================
+
+                for _, Server
+                    in ipairs(ServersList) do
+
+                    -- Condition can change while scanning
                     if not CanServerHop() then
                         break
                     end
-                    
-                    -- Validasi server
-                    local isValid = Server.id
+
+                    --==================================================
+                    -- SERVER FILTER
+                    --
+                    -- ONLY 1-2 PLAYERS
+                    --==================================================
+
+                    local isValid =
+                        Server.id
                         and Server.id ~= game.JobId
+
                         and Server.playing
                         and Server.playing >= 1
+                        and Server.playing <= MAX_SERVER_PLAYERS
+
                         and Server.maxPlayers
-                        and Server.playing < Server.maxPlayers
-                    
+                        and Server.playing
+                            < Server.maxPlayers
+
                     if isValid then
-                        -- Check availability
-                        local available, reason = IsServerAvailable(Server.id)
-                        
-                        if available then
-                            serverFound = true
-                            
-                            -- Mark server as attempted
-                            IgnoredServers[Server.id] = os.time()
-                            UpdateIgnoredServers(IgnoredServers)
-                            
-                            -- Send notification
-                            SendDiscordWebhook(
-                                "🔄 Server Hopping (Attempt " .. attemptCount .. ")",
-                                "Attempting to join server: `" .. Server.id .. "`\nPlayers: " .. Server.playing .. "/" .. Server.maxPlayers
+
+                        local available, reason =
+                            IsServerAvailable(
+                                Server.id
                             )
-                            
-                            -- Attempt teleport with retry
-                            local teleportSuccess, teleportMsg = TeleportWithRetry(Server.id, RetryConfig.MaxRetries)
-                            
+
+                        if available then
+
+                            serverFound = true
+
+                            -- Mark server as attempted
+                            IgnoredServers[
+                                Server.id
+                            ] = os.time()
+
+                            UpdateIgnoredServers(
+                                IgnoredServers
+                            )
+
+                            --==================================================
+                            -- WEBHOOK
+                            --==================================================
+
+                            SendDiscordWebhook(
+                                "🔄 Server Hopping (Attempt "
+                                .. attemptCount
+                                .. ")",
+
+                                "Attempting to join server: `"
+                                .. Server.id
+                                .. "`\nPlayers: "
+                                .. Server.playing
+                                .. "/"
+                                .. Server.maxPlayers
+                            )
+
+                            --==================================================
+                            -- TELEPORT
+                            --==================================================
+
+                            local teleportSuccess,
+                                teleportMsg =
+                                TeleportWithRetry(
+                                    Server.id,
+                                    RetryConfig.MaxRetries
+                                )
+
                             if teleportSuccess then
-                                -- Reset failure counter on success
-                                RetryState.ConsecutiveFailures = 0
-                                RetryState.LastAttemptTime = os.time()
+
+                                RetryState.ConsecutiveFailures =
+                                    0
+
+                                RetryState.LastAttemptTime =
+                                    os.time()
+
                                 return
+
                             else
-                                -- Track failure
-                                RetryState.FailedServers[Server.id] = os.time()
-                                RetryState.ConsecutiveFailures = RetryState.ConsecutiveFailures + 1
-                                RetryState.LastAttemptTime = os.time()
-                                
-                                -- Check if too many consecutive failures
-                                if RetryState.ConsecutiveFailures >= RetryConfig.MaxConsecutiveFailures then
-                                    RetryState.IsInCooldown = true
+
+                                RetryState.FailedServers[
+                                    Server.id
+                                ] = os.time()
+
+                                RetryState.ConsecutiveFailures =
+                                    RetryState.ConsecutiveFailures
+                                    + 1
+
+                                RetryState.LastAttemptTime =
+                                    os.time()
+
+                                --==================================================
+                                -- MAX CONSECUTIVE FAILURES
+                                --==================================================
+
+                                if RetryState.ConsecutiveFailures
+                                    >= RetryConfig.MaxConsecutiveFailures then
+
+                                    RetryState.IsInCooldown =
+                                        true
+
                                     Library:Notify({
-                                        Title = "Max Failures Reached",
-                                        Description = string.format(
-                                            "%d consecutive failures. Entering cooldown for %d seconds.",
-                                            RetryState.ConsecutiveFailures,
-                                            RetryConfig.CooldownPeriod
-                                        ),
+                                        Title =
+                                            "Max Failures Reached",
+
+                                        Description =
+                                            string.format(
+                                                "%d consecutive failures. Entering cooldown for %d seconds.",
+                                                RetryState.ConsecutiveFailures,
+                                                RetryConfig.CooldownPeriod
+                                            ),
+
                                         Time = 5,
                                     })
-                                    
-                                    -- Send Discord notification about cooldown
+
                                     SendDiscordWebhook(
                                         "⚠️ Cooldown Activated",
+
                                         string.format(
                                             "Too many failed attempts (%d). Cooldown for %ds.\nLast server: %s",
                                             RetryState.ConsecutiveFailures,
@@ -808,84 +1124,86 @@ local function ServerHop()
                                             Server.id
                                         )
                                     )
-                                    
-                                    task.wait(RetryConfig.CooldownPeriod)
-                                    RetryState.IsInCooldown = false
-                                    RetryState.ConsecutiveFailures = 0
+
+                                    task.wait(
+                                        RetryConfig.CooldownPeriod
+                                    )
+
+                                    RetryState.IsInCooldown =
+                                        false
+
+                                    RetryState.ConsecutiveFailures =
+                                        0
                                 end
-                                
+
                                 Library:Notify({
-                                    Title = "Teleport Failed",
-                                    Description = string.format(
-                                        "Server %s: %s (Failures: %d/%d)",
-                                        string.sub(Server.id, 1, 8) .. "...",
-                                        teleportMsg,
-                                        RetryState.ConsecutiveFailures,
-                                        RetryConfig.MaxConsecutiveFailures
-                                    ),
+                                    Title =
+                                        "Teleport Failed",
+
+                                    Description =
+                                        string.format(
+                                            "Server %s: %s (Failures: %d/%d)",
+                                            string.sub(
+                                                Server.id,
+                                                1,
+                                                8
+                                            ) .. "...",
+
+                                            teleportMsg,
+
+                                            RetryState.ConsecutiveFailures,
+
+                                            RetryConfig.MaxConsecutiveFailures
+                                        ),
+
                                     Time = 3,
                                 })
                             end
                         end
                     end
                 end
-                
-                -- Jika tidak ada server ditemukan di halaman ini
+
+                --==================================================
+                -- NO SERVER FOUND
+                --==================================================
+
                 if not serverFound then
-                    cursor = result.nextPageCursor
-                    
+
+                    cursor =
+                        result.nextPageCursor
+
                     if not cursor then
-                        cursor = "" -- Reset pagination
-                        
+
+                        cursor = ""
+
                         Library:Notify({
-                            Title = "No Servers Found",
-                            Description = "Scanning all pages. Restarting search...",
+                            Title =
+                                "No Servers Found",
+
+                            Description =
+                                "No valid 1-2 player servers found. Restarting search...",
+
                             Time = 3,
                         })
-                        
+
                         task.wait(2)
+
                     else
+
                         task.wait(0.5)
                     end
                 end
             end
         end
     end
+
+    -- Clean pending state when loop ends
+    ServerHopPending = false
+    ServerHopPendingSince = 0
 end
 
 --==================================================
--- AUTO FARM TOGGLE
---==================================================
-
-AutoFarmGroup:AddToggle("EnableAutoFarm", {
-    Text = "Enable Auto Farm",
-    Tooltip = "Teleport Survivor to the detected finish location",
-
-    Default = false,
-})
-
---==================================================
--- AUTO SERVERHOP
---==================================================
-
-AutoFarmGroup:AddToggle("ServerHop", {
-    Text = "Server Hop",
-    Tooltip = "Hop to 1-2 player servers as Spectator",
-
-    Default = false,
-
-    Callback = function(Value)
-
-        if Value then
-            task.spawn(function()
-                ServerHop()
-            end)
-        end
-    end,
-})
-
---==================================================
--- AUTO EXECUTE
+-- AUTO EXECUTE TOGGLE
 --==================================================
 
 local LOADER_URL =
