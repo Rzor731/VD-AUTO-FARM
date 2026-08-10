@@ -712,150 +712,142 @@ local function ServerHop()
         -- Check cooldown
         if not ServerHopWithRetry() then
             task.wait(1)
-            continue
-        end
-        
         -- Check current round + current role
-        if not CanServerHop() then
+        elseif not CanServerHop() then
             task.wait(0.5)
-            continue
-        end
-        
-        attemptCount = attemptCount + 1
-        
-        local success, result = pcall(function()
-            local url = "https://games.roblox.com/v1/games/"
-                .. game.PlaceId
-                .. "/servers/Public?limit=100"
-                .. "&sortOrder=Asc"
-                .. "&excludeFullGames=true"
-                .. "&cursor=" .. cursor
+        else
+            attemptCount = attemptCount + 1
             
-            return HttpService:JSONDecode(game:HttpGet(url))
-        end)
-        
-        if not success or not result or not result.data then
-            Library:Notify({
-                Title = "API Error",
-                Description = "Failed to fetch servers. Retrying...",
-                Time = 3,
-            })
-            task.wait(3)
-            continue
-        end
-        
-        local ServersList = result.data
-        local serverFound = false
-        
-        -- Cari server yang valid
-        for _, Server in ipairs(ServersList) do
-            if not CanServerHop() then
-                break
-            end
-            
-            -- Validasi server
-            local isValid = Server.id
-                and Server.id ~= game.JobId
-                and Server.playing
-                and Server.playing >= 1
-                and Server.maxPlayers
-                and Server.playing < Server.maxPlayers
-            
-            if not isValid then
-                continue
-            end
-            
-            -- Check availability
-            local available, reason = IsServerAvailable(Server.id)
-            if not available then
-                continue
-            end
-            
-            serverFound = true
-            
-            -- Mark server as attempted
-            IgnoredServers[Server.id] = os.time()
-            UpdateIgnoredServers(IgnoredServers)
-            
-            -- Send notification
-            SendDiscordWebhook(
-                "🔄 Server Hopping (Attempt " .. attemptCount .. ")",
-                "Attempting to join server: `" .. Server.id .. "`\nPlayers: " .. Server.playing .. "/" .. Server.maxPlayers
-            )
-            
-            -- Attempt teleport with retry
-            local teleportSuccess, teleportMsg = TeleportWithRetry(Server.id, RetryConfig.MaxRetries)
-            
-            if teleportSuccess then
-                -- Reset failure counter on success
-                RetryState.ConsecutiveFailures = 0
-                RetryState.LastAttemptTime = os.time()
-                return
-            else
-                -- Track failure
-                RetryState.FailedServers[Server.id] = os.time()
-                RetryState.ConsecutiveFailures = RetryState.ConsecutiveFailures + 1
-                RetryState.LastAttemptTime = os.time()
+            local success, result = pcall(function()
+                local url = "https://games.roblox.com/v1/games/"
+                    .. game.PlaceId
+                    .. "/servers/Public?limit=100"
+                    .. "&sortOrder=Asc"
+                    .. "&excludeFullGames=true"
+                    .. "&cursor=" .. cursor
                 
-                -- Check if too many consecutive failures
-                if RetryState.ConsecutiveFailures >= RetryConfig.MaxConsecutiveFailures then
-                    RetryState.IsInCooldown = true
-                    Library:Notify({
-                        Title = "Max Failures Reached",
-                        Description = string.format(
-                            "%d consecutive failures. Entering cooldown for %d seconds.",
-                            RetryState.ConsecutiveFailures,
-                            RetryConfig.CooldownPeriod
-                        ),
-                        Time = 5,
-                    })
+                return HttpService:JSONDecode(game:HttpGet(url))
+            end)
+            
+            if not success or not result or not result.data then
+                Library:Notify({
+                    Title = "API Error",
+                    Description = "Failed to fetch servers. Retrying...",
+                    Time = 3,
+                })
+                task.wait(3)
+            else
+                local ServersList = result.data
+                local serverFound = false
+                
+                -- Cari server yang valid
+                for _, Server in ipairs(ServersList) do
+                    if not CanServerHop() then
+                        break
+                    end
                     
-                    -- Send Discord notification about cooldown
-                    SendDiscordWebhook(
-                        "⚠️ Cooldown Activated",
-                        string.format(
-                            "Too many failed attempts (%d). Cooldown for %ds.\nLast server: %s",
-                            RetryState.ConsecutiveFailures,
-                            RetryConfig.CooldownPeriod,
-                            Server.id
-                        )
-                    )
+                    -- Validasi server
+                    local isValid = Server.id
+                        and Server.id ~= game.JobId
+                        and Server.playing
+                        and Server.playing >= 1
+                        and Server.maxPlayers
+                        and Server.playing < Server.maxPlayers
                     
-                    task.wait(RetryConfig.CooldownPeriod)
-                    RetryState.IsInCooldown = false
-                    RetryState.ConsecutiveFailures = 0
+                    if isValid then
+                        -- Check availability
+                        local available, reason = IsServerAvailable(Server.id)
+                        
+                        if available then
+                            serverFound = true
+                            
+                            -- Mark server as attempted
+                            IgnoredServers[Server.id] = os.time()
+                            UpdateIgnoredServers(IgnoredServers)
+                            
+                            -- Send notification
+                            SendDiscordWebhook(
+                                "🔄 Server Hopping (Attempt " .. attemptCount .. ")",
+                                "Attempting to join server: `" .. Server.id .. "`\nPlayers: " .. Server.playing .. "/" .. Server.maxPlayers
+                            )
+                            
+                            -- Attempt teleport with retry
+                            local teleportSuccess, teleportMsg = TeleportWithRetry(Server.id, RetryConfig.MaxRetries)
+                            
+                            if teleportSuccess then
+                                -- Reset failure counter on success
+                                RetryState.ConsecutiveFailures = 0
+                                RetryState.LastAttemptTime = os.time()
+                                return
+                            else
+                                -- Track failure
+                                RetryState.FailedServers[Server.id] = os.time()
+                                RetryState.ConsecutiveFailures = RetryState.ConsecutiveFailures + 1
+                                RetryState.LastAttemptTime = os.time()
+                                
+                                -- Check if too many consecutive failures
+                                if RetryState.ConsecutiveFailures >= RetryConfig.MaxConsecutiveFailures then
+                                    RetryState.IsInCooldown = true
+                                    Library:Notify({
+                                        Title = "Max Failures Reached",
+                                        Description = string.format(
+                                            "%d consecutive failures. Entering cooldown for %d seconds.",
+                                            RetryState.ConsecutiveFailures,
+                                            RetryConfig.CooldownPeriod
+                                        ),
+                                        Time = 5,
+                                    })
+                                    
+                                    -- Send Discord notification about cooldown
+                                    SendDiscordWebhook(
+                                        "⚠️ Cooldown Activated",
+                                        string.format(
+                                            "Too many failed attempts (%d). Cooldown for %ds.\nLast server: %s",
+                                            RetryState.ConsecutiveFailures,
+                                            RetryConfig.CooldownPeriod,
+                                            Server.id
+                                        )
+                                    )
+                                    
+                                    task.wait(RetryConfig.CooldownPeriod)
+                                    RetryState.IsInCooldown = false
+                                    RetryState.ConsecutiveFailures = 0
+                                end
+                                
+                                Library:Notify({
+                                    Title = "Teleport Failed",
+                                    Description = string.format(
+                                        "Server %s: %s (Failures: %d/%d)",
+                                        string.sub(Server.id, 1, 8) .. "...",
+                                        teleportMsg,
+                                        RetryState.ConsecutiveFailures,
+                                        RetryConfig.MaxConsecutiveFailures
+                                    ),
+                                    Time = 3,
+                                })
+                            end
+                        end
+                    end
                 end
                 
-                Library:Notify({
-                    Title = "Teleport Failed",
-                    Description = string.format(
-                        "Server %s: %s (Failures: %d/%d)",
-                        string.sub(Server.id, 1, 8) .. "...",
-                        teleportMsg,
-                        RetryState.ConsecutiveFailures,
-                        RetryConfig.MaxConsecutiveFailures
-                    ),
-                    Time = 3,
-                })
-            end
-        end
-        
-        -- Jika tidak ada server ditemukan di halaman ini
-        if not serverFound then
-            cursor = result.nextPageCursor
-            
-            if not cursor then
-                cursor = "" -- Reset pagination
-                
-                Library:Notify({
-                    Title = "No Servers Found",
-                    Description = "Scanning all pages. Restarting search...",
-                    Time = 3,
-                })
-                
-                task.wait(2)
-            else
-                task.wait(0.5)
+                -- Jika tidak ada server ditemukan di halaman ini
+                if not serverFound then
+                    cursor = result.nextPageCursor
+                    
+                    if not cursor then
+                        cursor = "" -- Reset pagination
+                        
+                        Library:Notify({
+                            Title = "No Servers Found",
+                            Description = "Scanning all pages. Restarting search...",
+                            Time = 3,
+                        })
+                        
+                        task.wait(2)
+                    else
+                        task.wait(0.5)
+                    end
+                end
             end
         end
     end
