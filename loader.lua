@@ -654,13 +654,10 @@ local function ServerHop()
         cursor = result.nextPageCursor
 
         if not cursor then
-
             -- Start pagination again
             cursor = ""
-
             task.wait(1)
         else
-
             task.wait(0.2)
         end
     end
@@ -690,11 +687,9 @@ AutoFarmGroup:AddToggle("ServerHop", {
     Callback = function(Value)
 
         if Value then
-
             task.spawn(function()
                 ServerHop()
             end)
-
         end
     end,
 })
@@ -794,14 +789,14 @@ WebhookGroup:AddButton("Test Webhook", function()
     
     if ok then
         Library:Notify({
-            Title = "Webhook Success",
+            Title = "Webhook Success   \n",
             Description = "Test message sent to Discord!",
             Icon = "check",
             Time = 4,
         })
     else
         Library:Notify({
-            Title = "Webhook Failed",
+            Title = "Webhook Failed   \n",
             Description = msg,
             Icon = "x",
             Time = 5,
