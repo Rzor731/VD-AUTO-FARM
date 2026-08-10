@@ -71,7 +71,7 @@ local BeatState = {
 --==================================================
 
 local function GetRole()
-    local player = game:GetService("Players").LocalPlayer
+    local player = LocalPlayer
 
     if not player.Team then
         return "Unknown"
@@ -96,8 +96,7 @@ local function GetRole()
 end
 
 local function GetCharacterRoot()
-    local player = game:GetService("Players").LocalPlayer
-    local character = player.Character
+    local character = LocalPlayer.Character
 
     return character and character:FindFirstChild("HumanoidRootPart")
 end
@@ -122,6 +121,28 @@ local function GetExecutorName()
     return (identifyexecutor and identifyexecutor())
         or (getexecutorname and getexecutorname())
         or "Unknown Executor"
+end
+
+-- Get Stats
+local InitialStats = {
+    Level = LocalPlayer:GetAttribute("Level") or 0,
+    Sins = LocalPlayer:GetAttribute("KillerChance") or 0,
+    Screws = LocalPlayer:GetAttribute("Screws") or 0,
+    Gears = LocalPlayer:GetAttribute("Gears") or 0,
+}
+
+local function GetFarmStats()
+    local curLvl = LocalPlayer:GetAttribute("Level") or 0
+    local curSins = LocalPlayer:GetAttribute("KillerChance") or 0
+    local curScrews = LocalPlayer:GetAttribute("Screws") or 0
+    local curGears = LocalPlayer:GetAttribute("Gears") or 0
+
+    return {
+        Level = { Current = curLvl, Gained = curLvl - InitialStats.Level },
+        Sins = { Current = curSins, Gained = curSins - InitialStats.Sins },
+        Screws = { Current = curScrews, Gained = curScrews - InitialStats.Screws },
+        Gears = { Current = curGears, Gained = curGears - InitialStats.Gears },
+    }
 end
 
 --==================================================
@@ -476,27 +497,6 @@ TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, erro
         })
     end
 end)
-
-local InitialStats = {
-    Level = LocalPlayer:GetAttribute("Level") or 0,
-    Sins = LocalPlayer:GetAttribute("KillerChance") or 0,
-    Screws = LocalPlayer:GetAttribute("Screws") or 0,
-    Gears = LocalPlayer:GetAttribute("Gears") or 0,
-}
-
-local function GetFarmStats()
-    local curLvl = LocalPlayer:GetAttribute("Level") or 0
-    local curSins = LocalPlayer:GetAttribute("KillerChance") or 0
-    local curScrews = LocalPlayer:GetAttribute("Screws") or 0
-    local curGears = LocalPlayer:GetAttribute("Gears") or 0
-
-    return {
-        Level = { Current = curLvl, Gained = curLvl - InitialStats.Level },
-        Sins = { Current = curSins, Gained = curSins - InitialStats.Sins },
-        Screws = { Current = curScrews, Gained = curScrews - InitialStats.Screws },
-        Gears = { Current = curGears, Gained = curGears - InitialStats.Gears },
-    }
-end
 
 local IgnoredServers = {}
 
