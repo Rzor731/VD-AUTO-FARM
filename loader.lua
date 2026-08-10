@@ -375,7 +375,7 @@ local function BeatGameSurvivor()
     end
 
     local elapsedTime = os.clock() - BeatState.FinishPendingSince
-    if elapsedTime < 5 then
+    if elapsedTime < 16 then
         -- Masih dalam masa jeda 5 detik
         return
     end
