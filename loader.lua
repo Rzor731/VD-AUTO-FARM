@@ -4,7 +4,19 @@
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local source = game:HttpGet(repo .. "Library.lua")
+print("Library source:", type(source), #source)
+
+local fn, err = loadstring(source)
+print("Library loadstring:", type(fn), err)
+
+if not fn then
+    error("Library.lua gagal di-load: " .. tostring(err))
+end
+
+local Library = fn()
+print("Library:", type(Library))
+
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
