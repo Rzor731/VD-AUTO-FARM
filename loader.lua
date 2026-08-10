@@ -508,13 +508,17 @@ end)
 
 TimeUpdateEvent.OnClientEvent:Connect(function(Status)
     if Status == "Round" then
-        IsRound = true
+        -- Hanya reset sekali ketika BARU masuk ronde
+        if not IsRound then
+            IsRound = true
 
-        -- Reset Auto Farm untuk ronde baru
-        BeatState.BeatSurvivorDone = false
-        BeatState.LastFinishPos = nil
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
+            BeatState.BeatSurvivorDone = false
+            BeatState.LastFinishPos = nil
+            BeatState.FinishPending = false
+            BeatState.FinishPendingSince = 0
+
+            print("[DEBUG] New round detected - AutoFarm state reset")
+        end
     end
 end)
 
