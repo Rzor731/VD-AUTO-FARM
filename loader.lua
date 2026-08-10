@@ -887,17 +887,7 @@ end
 
 AutoFarmGroup:AddToggle("EnableAutoFarm", {
     Text = "Auto Farm",
-    Tooltip = "Automatically finish as Survivor",
     Default = false,
-
-    Callback = function(Value)
-        if not Value then
-            BeatState.BeatSurvivorDone = false
-            BeatState.LastFinishPos = nil
-            BeatState.FinishPending = false
-            BeatState.FinishPendingSince = 0
-        end
-    end,
 })
 
 --==================================================
