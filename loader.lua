@@ -489,6 +489,67 @@ local SERVER_HOP_DELAY = 2
 local MAX_SERVER_PLAYERS = 2
 
 --==================================================
+-- SERVER HOP RETRY STATE
+--==================================================
+
+local RetryConfig = {
+MaxRetries = 3,
+RetryDelay = 2,
+BackoffMultiplier = 1.5,
+MaxConsecutiveFailures = 5,
+CooldownPeriod = 30,
+}
+
+local RetryState = {
+CurrentRetries = 0,
+ConsecutiveFailures = 0,
+FailedServers = {},
+LastAttemptTime = 0,
+IsInCooldown = false,
+}
+
+--==================================================
+-- CLEAN FAILED SERVERS
+--==================================================
+
+local function CleanFailedServers()
+local now = os.time()
+local expiredTime = 300
+
+```
+for serverId, timestamp in pairs(RetryState.FailedServers) do
+    if now - timestamp > expiredTime then
+        RetryState.FailedServers[serverId] = nil
+    end
+end
+```
+
+end
+
+--==================================================
+-- CHECK SERVER AVAILABILITY
+--==================================================
+
+local function IsServerAvailable(serverId)
+if IgnoredServers[serverId] then
+return false, "Server already ignored"
+end
+
+```
+if RetryState.FailedServers[serverId] then
+    local timeSinceFailure =
+        os.time() - RetryState.FailedServers[serverId]
+
+    if timeSinceFailure < 60 then
+        return false, "Server in cooldown period"
+    end
+end
+
+return true, nil
+```
+
+end
+--==================================================
 -- STATUS DETECTOR
 --==================================================
 
