@@ -22,6 +22,7 @@ local Window = Library:CreateWindow({
     Title = "",
     Footer = "version: 1.0.0",
     Icon = "bot",
+
     NotifySide = "Right",
     ShowCustomCursor = true,
 })
@@ -51,8 +52,6 @@ local WebhookGroup = Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
 local BeatState = {
     LastFinishPos = nil,
     BeatSurvivorDone = false,
-    FinishPending = false,
-    FinishPendingSince = 0,
 }
 
 --==================================================
@@ -72,10 +71,11 @@ local function GetRole()
         return "Killer"
     end
 
-    if name == "Survivor" or name == "Survivors" then
+    if name == "Survivors" then
         return "Survivor"
     end
 
+    -- Support both possible spectator team names
     if name == "Spectator" or name == "Spectators" then
         return "Spectator"
     end
@@ -90,22 +90,22 @@ local function GetCharacterRoot()
     return character and character:FindFirstChild("HumanoidRootPart")
 end
 
+-- Universal HTTP Request Fallback for All Modern Executors
 local function safeRequest(options)
-    local req =
-        (syn and syn.request)
-        or (http and http.request)
-        or http_request
-        or request
-        or (fluxus and fluxus.request)
-        or (krnl and krnl.request)
+    local req = (syn and syn.request) 
+             or (http and http.request) 
+             or http_request 
+             or request 
+             or (fluxus and fluxus.request)
+             or (krnl and krnl.request)
 
     if req then
         return req(options)
     end
-
     return nil
 end
 
+-- Detect Executor Name
 local function GetExecutorName()
     return (identifyexecutor and identifyexecutor())
         or (getexecutorname and getexecutorname())
@@ -117,15 +117,14 @@ end
 --==================================================
 
 local function SendDiscordWebhook(customTitle, customDesc, forceSend)
+    -- Check if Webhook is enabled unless forceSend (Test Button) is true
     if not forceSend and (not Toggles.EnableWebhook or not Toggles.EnableWebhook.Value) then
         return false, "Webhook Disabled"
     end
 
     local webhookUrl = Options.WebhookLink and Options.WebhookLink.Value or ""
 
-    if not webhookUrl
-        or webhookUrl == ""
-        or not string.find(webhookUrl, "discord.com/api/webhooks") then
+    if not webhookUrl or webhookUrl == "" or not string.find(webhookUrl, "discord.com/api/webhooks") then
         return false, "Invalid Webhook URL"
     end
 
@@ -134,94 +133,78 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     local MarketplaceService = game:GetService("MarketplaceService")
     local LocalPlayer = Players.LocalPlayer
 
+    -- Fetch Game Name
     local gameName = "Unknown Game"
-
     pcall(function()
         gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
     end)
 
+    -- Player Details
     local username = LocalPlayer.Name
     local displayName = LocalPlayer.DisplayName
     local userId = LocalPlayer.UserId
     local profileUrl = "https://www.roblox.com/users/" .. userId .. "/profile"
-    local avatarUrl =
-        "https://roblox.com/headshot-thumbnail/image?userId="
-        .. userId
-        .. "&width=420&height=420&format=png"
-
+    local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=420&height=420&format=png"
     local executorName = GetExecutorName()
     local currentRole = GetRole()
     local timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
 
+    -- Payload Data
     local payload = {
         ["username"] = "VD Auto Farm Logger",
         ["avatar_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
         ["embeds"] = {{
             ["title"] = customTitle or "🚀 VD Auto Farm Notification",
             ["description"] = customDesc or "Notification trigger from **VD Auto Farm Loader**.",
-            ["color"] = 5793266,
+            ["color"] = 5793266, -- Discord Blurple (#5865F2)
             ["timestamp"] = timestamp,
             ["thumbnail"] = {
-                ["url"] = avatarUrl,
+                ["url"] = avatarUrl
             },
             ["fields"] = {
                 {
                     ["name"] = "👤 Player Info",
-                    ["value"] = string.format(
-                        "**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`",
-                        displayName,
-                        username,
-                        profileUrl,
-                        userId
-                    ),
-                    ["inline"] = true,
+                    ["value"] = string.format("**Display:** %s\n**Username:** [%s](%s)\n**User ID:** `%d`", displayName, username, profileUrl, userId),
+                    ["inline"] = true
                 },
                 {
                     ["name"] = "⚡ Executor",
                     ["value"] = string.format("`%s`", executorName),
-                    ["inline"] = true,
+                    ["inline"] = true
                 },
                 {
                     ["name"] = "🎮 Game Details",
-                    ["value"] = string.format(
-                        "**Game:** %s\n**Place ID:** `%d`\n**Role:** `%s`",
-                        gameName,
-                        game.PlaceId,
-                        currentRole
-                    ),
-                    ["inline"] = false,
+                    ["value"] = string.format("**Game:** %s\n**Place ID:** `%d`\n**Role:** `%s`", gameName, game.PlaceId, currentRole),
+                    ["inline"] = false
                 },
                 {
                     ["name"] = "📌 Server Job ID",
-                    ["value"] = string.format(
-                        "```lua\n%s\n```",
-                        game.JobId ~= "" and game.JobId or "Singleplayer / Local"
-                    ),
-                    ["inline"] = false,
-                },
+                    ["value"] = string.format("```lua\n%s\n```", (game.JobId ~= "" and game.JobId or "Singleplayer / Local")),
+                    ["inline"] = false
+                }
             },
             ["footer"] = {
                 ["text"] = "VD Auto Farm System",
-                ["icon_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
-            },
-        }},
+                ["icon_url"] = "https://cdn-icons-png.flaticon.com/512/2092/2092663.png"
+            }
+        }}
     }
 
     local response = safeRequest({
         Url = webhookUrl,
         Method = "POST",
         Headers = {
-            ["Content-Type"] = "application/json",
+            ["Content-Type"] = "application/json"
         },
-        Body = HttpService:JSONEncode(payload),
+        Body = HttpService:JSONEncode(payload)
     })
 
     if response and (response.StatusCode == 200 or response.StatusCode == 204) then
         return true, "Webhook successfully sent!"
+    else
+        local status = response and response.StatusCode or "No Response / Failed Request"
+        return false, "Failed Status: " .. tostring(status)
     end
-
-    local status = response and response.StatusCode or "No Response / Failed Request"
-    return false, "Failed Status: " .. tostring(status)
 end
 
 --==================================================
@@ -229,19 +212,16 @@ end
 --==================================================
 
 local function BeatGameSurvivor()
+
+    -- Feature disabled
     if not Toggles.EnableAutoFarm.Value then
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
         return
     end
 
-    local role = GetRole()
-
-    if role ~= "Survivor" then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
+    -- Only Survivor
+    if GetRole() ~= "Survivor" then
         return
     end
 
@@ -252,33 +232,69 @@ local function BeatGameSurvivor()
     end
 
     local Workspace = game:GetService("Workspace")
-    local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("map")
+    local map = Workspace:FindFirstChild("Map")
 
     if not map then
         return
     end
 
     local exitPos = nil
-    local detectorUsed = "None"
 
     pcall(function()
-        if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
-            exitPos = Vector3.new(3098.16, 454.04, -4918.74)
-            detectorUsed = "#1 Rooftop"
+
+        --==================================================
+        -- MAP DETECTOR #1
+        -- Rooftop
+        --==================================================
+
+        if map:FindFirstChild("RooftopHitbox")
+            or map:FindFirstChild("Rooftop") then
+
+            exitPos = Vector3.new(
+                3098.16,
+                454.04,
+                -4918.74
+            )
+
             return
         end
+
+        --==================================================
+        -- MAP DETECTOR #2
+        -- HooksMeat
+        --==================================================
 
         if map:FindFirstChild("HooksMeat") then
-            exitPos = Vector3.new(1546.12, 152.21, -796.72)
-            detectorUsed = "#2 HooksMeat"
+
+            exitPos = Vector3.new(
+                1546.12,
+                152.21,
+                -796.72
+            )
+
             return
         end
 
+        --==================================================
+        -- MAP DETECTOR #3
+        -- Churchbell
+        --==================================================
+
         if map:FindFirstChild("churchbell") then
-            exitPos = Vector3.new(760.98, -20.14, -78.48)
-            detectorUsed = "#3 Churchbell"
+
+            exitPos = Vector3.new(
+                760.98,
+                -20.14,
+                -78.48
+            )
+
             return
         end
+
+        --==================================================
+        -- MAP DETECTOR #4
+        -- Finishline
+        --==================================================
 
         local finish =
             map:FindFirstChild("Finishline")
@@ -286,136 +302,140 @@ local function BeatGameSurvivor()
             or map:FindFirstChild("Fininshline")
 
         if finish then
+
             if finish:IsA("BasePart") then
+
                 exitPos = finish.Position
+
             elseif finish:IsA("Model") then
-                local part = finish:FindFirstChildWhichIsA("BasePart")
+
+                local part =
+                    finish:FindFirstChildWhichIsA("BasePart")
+
                 if part then
                     exitPos = part.Position
                 end
             end
 
-            if exitPos then
-                detectorUsed = "#4 Finishline Object (" .. finish.Name .. ")"
-            end
-
             return
         end
 
+        --==================================================
+        -- MAP DETECTOR #5
+        -- Any descendant containing "finish"
+        --==================================================
+
         for _, obj in ipairs(map:GetDescendants()) do
+
             if obj.Name:lower():find("finish") then
+
                 if obj:IsA("BasePart") then
+
                     exitPos = obj.Position
-                    detectorUsed = "#5 Descendant (" .. obj.Name .. ")"
                     break
+
                 elseif obj:IsA("Model") then
-                    local part = obj:FindFirstChildWhichIsA("BasePart")
+
+                    local part =
+                        obj:FindFirstChildWhichIsA("BasePart")
 
                     if part then
                         exitPos = part.Position
-                        detectorUsed = "#5 Descendant Model (" .. obj.Name .. ")"
                         break
                     end
                 end
             end
         end
 
+        --==================================================
+        -- MAP DETECTOR #6
+        -- Limestone fallback
+        --==================================================
+
         if not exitPos then
+
             for _, obj in ipairs(map:GetDescendants()) do
-                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
-                    exitPos = Vector3.new(-947.90, 152.12, -7579.52)
-                    detectorUsed = "#6 Limestone Material"
+
+                if obj:IsA("MeshPart")
+                    and obj.Material == Enum.Material.Limestone then
+
+                    exitPos = Vector3.new(
+                        -947.90,
+                        152.12,
+                        -7579.52
+                    )
+
                     break
                 end
             end
         end
 
+        --==================================================
+        -- MAP DETECTOR #7
+        -- Leather fallback
+        --==================================================
+
         if not exitPos then
+
             for _, obj in ipairs(map:GetDescendants()) do
-                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
-                    exitPos = Vector3.new(1546.12, 152.21, -796.72)
-                    detectorUsed = "#7 Leather Material"
+
+                if obj:IsA("MeshPart")
+                    and obj.Material == Enum.Material.Leather then
+
+                    exitPos = Vector3.new(
+                        1546.12,
+                        152.21,
+                        -796.72
+                    )
+
                     break
                 end
             end
         end
+
     end)
 
+    -- No exit detected
     if not exitPos then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
         return
     end
 
+    --==================================================
+    -- FINISH POSITION CHANGE CHECK
+    --==================================================
+
     if BeatState.LastFinishPos then
-        local dist = (exitPos - BeatState.LastFinishPos).Magnitude
+
+        local dist =
+            (exitPos - BeatState.LastFinishPos).Magnitude
 
         if dist > 50 then
             BeatState.BeatSurvivorDone = false
         end
     end
 
+    -- Already completed this location
     if BeatState.BeatSurvivorDone then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
         return
     end
 
-    if not BeatState.FinishPending then
-        BeatState.FinishPending = true
-        BeatState.FinishPendingSince = os.clock()
+    --==================================================
+    -- TELEPORT TO FINISH
+    --==================================================
 
-        print(
-            "[DEBUG AutoFarm] Finish line ditemukan via "
-            .. detectorUsed
-            .. "! Menunggu 5 detik..."
-        )
+    root.CFrame = CFrame.new(
+        exitPos + Vector3.new(0, 3, 0)
+    )
 
-        return
-    end
-
-    local elapsedTime = os.clock() - BeatState.FinishPendingSince
-
-    if elapsedTime < 5 then
-        return
-    end
-
-    if not Toggles.EnableAutoFarm.Value then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
-        return
-    end
-
-    if GetRole() ~= "Survivor" then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
-        return
-    end
-
-    local currentRoot = GetCharacterRoot()
-
-    if not currentRoot then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
-        return
-    end
-
-    currentRoot.CFrame = CFrame.new(exitPos + Vector3.new(0, 3, 0))
+    --==================================================
+    -- SAVE STATE & WEBHOOK NOTIFY
+    --==================================================
 
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
-    BeatState.FinishPending = false
-    BeatState.FinishPendingSince = 0
 
-    print(
-        "[DEBUG AutoFarm] SUCCESS! Teleport ke finish line via "
-        .. detectorUsed
-    )
-
-    SendDiscordWebhook(
-        "🏆 Round Finished!",
-        "User successfully teleported to the map finish point!"
-    )
+    -- Send notification to webhook upon finishing
+    SendDiscordWebhook("🏆 Round Finished!", "User successfully teleported to the map finish point!")
 end
 
 --==================================================
@@ -431,32 +451,9 @@ local Players = game:GetService("Players")
 
 local IgnoredServers = {}
 
---==================================================
--- SERVER HOP RETRY CONFIG / STATE
---==================================================
-
-local RetryConfig = {
-    RetryDelay = 2,
-    BackoffMultiplier = 1.5,
-    MaxRetries = 3,
-    MaxConsecutiveFailures = 5,
-    CooldownPeriod = 30,
-}
-
-local RetryState = {
-    IsInCooldown = false,
-    LastAttemptTime = 0,
-    ConsecutiveFailures = 0,
-    CurrentRetries = 0,
-    FailedServers = {},
-}
-
---==================================================
--- IGNORED SERVERS
---==================================================
-
 local function GetIgnoredServers()
-    if not isfile or not readfile or not isfile(IGNORE_FILE) then
+
+    if not isfile(IGNORE_FILE) then
         return {}
     end
 
@@ -464,12 +461,16 @@ local function GetIgnoredServers()
     local now = os.time()
 
     for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
-        local serverId, timestamp = line:match("^([^|]+)|(%d+)$")
+
+        local serverId, timestamp =
+            line:match("([^|]+)|?(%d*)")
+
         timestamp = tonumber(timestamp) or 0
 
         if serverId
             and serverId ~= ""
             and now - timestamp < HOUR then
+
             list[serverId] = timestamp
         end
     end
@@ -478,9 +479,6 @@ local function GetIgnoredServers()
 end
 
 local function UpdateIgnoredServers(list)
-    if not writefile then
-        return
-    end
 
     local lines = {}
 
@@ -488,67 +486,13 @@ local function UpdateIgnoredServers(list)
         table.insert(lines, serverId .. "|" .. timestamp)
     end
 
-    writefile(IGNORE_FILE, table.concat(lines, "\n"))
+    writefile(
+        IGNORE_FILE,
+        table.concat(lines, "\n")
+    )
 end
 
 IgnoredServers = GetIgnoredServers()
-
---==================================================
--- CLEAN FAILED / IGNORED SERVERS
---==================================================
-
-local function CleanFailedServers()
-    local now = os.time()
-
-    for serverId, timestamp in pairs(RetryState.FailedServers) do
-        if now - timestamp >= HOUR then
-            RetryState.FailedServers[serverId] = nil
-        end
-    end
-
-    local changed = false
-
-    for serverId, timestamp in pairs(IgnoredServers) do
-        if now - timestamp >= HOUR then
-            IgnoredServers[serverId] = nil
-            changed = true
-        end
-    end
-
-    if changed then
-        UpdateIgnoredServers(IgnoredServers)
-    end
-end
-
---==================================================
--- SERVER AVAILABILITY
---==================================================
-
-local function IsServerAvailable(serverId)
-    if not serverId or serverId == "" then
-        return false, "Invalid server ID"
-    end
-
-    if serverId == game.JobId then
-        return false, "Current server"
-    end
-
-    if IgnoredServers[serverId] then
-        return false, "Server ignored"
-    end
-
-    if RetryState.FailedServers[serverId] then
-        local elapsed = os.time() - RetryState.FailedServers[serverId]
-
-        if elapsed < HOUR then
-            return false, "Server recently failed"
-        end
-
-        RetryState.FailedServers[serverId] = nil
-    end
-
-    return true, "Available"
-end
 
 --==================================================
 -- SERVER HOP STATE
@@ -556,33 +500,35 @@ end
 
 local IsRound = false
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local StatusUpdateEvent = Remotes:WaitForChild("StatusUpdateEvent")
-local TimeUpdateEvent = Remotes:WaitForChild("TimeUpdateEvent")
+local ReplicatedStorage =
+    game:GetService("ReplicatedStorage")
 
---==================================================
--- SERVER HOP DELAY STATE
---==================================================
+local Remotes =
+    ReplicatedStorage:WaitForChild("Remotes")
 
-local ServerHopPending = false
-local ServerHopPendingSince = 0
+local StatusUpdateEvent =
+    Remotes:WaitForChild("StatusUpdateEvent")
 
-local SERVER_HOP_DELAY = 2
-local MAX_SERVER_PLAYERS = 2
+local TimeUpdateEvent =
+    Remotes:WaitForChild("TimeUpdateEvent")
 
 --==================================================
 -- STATUS DETECTOR
 --==================================================
 
 StatusUpdateEvent.OnClientEvent:Connect(function(Status)
-    if Status == "WaitingForPlayers"
-        or Status == "IntermissionStarting"
-        or Status == "Intermission" then
+
+    if Status == "WaitingForPlayers" then
 
         IsRound = false
-        ServerHopPending = false
-        ServerHopPendingSince = 0
+
+    elseif Status == "IntermissionStarting" then
+
+        IsRound = false
+
+    elseif Status == "Intermission" then
+
+        IsRound = false
     end
 end)
 
@@ -591,354 +537,133 @@ end)
 --==================================================
 
 TimeUpdateEvent.OnClientEvent:Connect(function(Status)
-    if Status == "Round" and not IsRound then
+
+    if Status == "Round" then
         IsRound = true
-
-        BeatState.BeatSurvivorDone = false
-        BeatState.LastFinishPos = nil
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
-
-        print("[DEBUG] New round detected - AutoFarm state reset")
     end
 end)
 
 --==================================================
--- SERVER HOP CONDITION
+-- SERVER HOP PERMISSION
 --==================================================
 
 local function CanServerHop()
+
+    -- Must be inside a round
+    if not IsRound then
+        return false
+    end
+
+    -- Only Spectator or Killer may serverhop during round
     local role = GetRole()
 
-    if role == "Survivor" then
+    if role ~= "Spectator" and role ~= "Killer" then
         return false
     end
-
-    if role == "Killer" or role == "Spectator" then
-        return IsRound
-    end
-
-    return false
-end
-
---==================================================
--- SERVER HOP DELAY
---==================================================
-
-local function WaitForServerHopDelay()
-    if not ServerHopPending then
-        ServerHopPending = true
-        ServerHopPendingSince = os.clock()
-
-        print("[DEBUG ServerHop] Memulai delay 2s...")
-        return false
-    end
-
-    if os.clock() - ServerHopPendingSince < SERVER_HOP_DELAY then
-        return false
-    end
-
-    if not Toggles.ServerHop.Value then
-        ServerHopPending = false
-        ServerHopPendingSince = 0
-        return false
-    end
-
-    if not CanServerHop() then
-        ServerHopPending = false
-        ServerHopPendingSince = 0
-        return false
-    end
-
-    ServerHopPending = false
-    ServerHopPendingSince = 0
 
     return true
 end
 
 --==================================================
--- TELEPORT WITH RETRY
---==================================================
-
-local function TeleportWithRetry(serverId, maxRetries)
-    local retryCount = 0
-    local currentDelay = RetryConfig.RetryDelay
-
-    RetryState.CurrentRetries = 0
-
-    while retryCount <= maxRetries do
-        if retryCount > 0 then
-            print(string.format(
-                "[DEBUG ServerHop] Retry %d/%d | Server: %s | Delay: %.1fs",
-                retryCount,
-                maxRetries,
-                serverId,
-                currentDelay
-            ))
-
-            task.wait(currentDelay)
-            currentDelay = currentDelay * RetryConfig.BackoffMultiplier
-        end
-
-        print("[DEBUG ServerHop] Teleport request: " .. serverId)
-
-        local success, errorResult = pcall(function()
-            TeleportService:TeleportToPlaceInstance(
-                game.PlaceId,
-                serverId,
-                Players.LocalPlayer
-            )
-        end)
-
-        if success then
-            return true, "Teleport successful"
-        end
-
-        retryCount += 1
-        RetryState.CurrentRetries = retryCount
-
-        local errorMsg = tostring(errorResult)
-
-        print(
-            "[DEBUG ServerHop] Teleport failed: "
-            .. errorMsg
-        )
-
-        if errorMsg:find("TeleportThrottled")
-            or errorMsg:find("TooManyRequests") then
-
-            currentDelay = math.max(currentDelay, 5)
-
-        elseif errorMsg:find("ServerFull")
-            or errorMsg:find("ServerClosed") then
-
-            return false, "Server full or closed"
-        end
-    end
-
-    return false, "Max retries exceeded"
-end
-
---==================================================
--- SERVER HOP RETRY STATE
---==================================================
-
-local function ServerHopWithRetry()
-    if RetryState.IsInCooldown then
-        local timeSinceLastAttempt =
-            os.time() - RetryState.LastAttemptTime
-
-        if timeSinceLastAttempt < RetryConfig.CooldownPeriod then
-            local remainingCooldown =
-                RetryConfig.CooldownPeriod - timeSinceLastAttempt
-
-            print(string.format(
-                "[DEBUG ServerHop] Cooldown aktif: %ds tersisa",
-                remainingCooldown
-            ))
-
-            return false
-        end
-
-        RetryState.IsInCooldown = false
-        RetryState.ConsecutiveFailures = 0
-        RetryState.CurrentRetries = 0
-
-        print("[DEBUG ServerHop] Cooldown selesai.")
-    end
-
-    CleanFailedServers()
-
-    return true
-end
-
---==================================================
--- MAIN SERVER HOP
+-- SERVER HOP
 --==================================================
 
 local function ServerHop()
+
     local cursor = ""
-    local attemptCount = 0
 
-    print("[DEBUG ServerHop] Loop dimulai.")
+    while Toggles.ServerHop.Value
+        and not Library.Unloaded do
 
-    while Toggles.ServerHop.Value and not Library.Unloaded do
-        if not ServerHopWithRetry() then
-            task.wait(1)
-
-        elseif not CanServerHop() then
-            ServerHopPending = false
-            ServerHopPendingSince = 0
+        -- Check current round + current role LIVE
+        if not CanServerHop() then
             task.wait(0.5)
+            continue
+        end
 
-        elseif not WaitForServerHopDelay() then
-            task.wait(0.1)
+        local success, result = pcall(function()
 
-        else
-            attemptCount += 1
+            local url =
+                "https://games.roblox.com/v1/games/"
+                .. game.PlaceId
+                .. "/servers/Public?limit=100"
+                .. "&sortOrder=Asc"
+                .. "&excludeFullGames=true"
+                .. "&cursor="
+                .. cursor
 
-            local success, result = pcall(function()
-                local url =
-                    "https://games.roblox.com/v1/games/"
-                    .. game.PlaceId
-                    .. "/servers/Public?limit=100"
-                    .. "&sortOrder=Asc"
-                    .. "&excludeFullGames=true"
+            return HttpService:JSONDecode(
+                game:HttpGet(url)
+            )
+        end)
 
-                if cursor ~= "" then
-                    url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
-                end
+        if not success
+            or not result
+            or not result.data then
 
-                return HttpService:JSONDecode(
-                    game:HttpGet(url)
+            task.wait(3)
+            continue
+        end
+
+        local ServersList = result.data
+
+        --==================================================
+        -- FIND SERVER
+        --==================================================
+
+        for _, Server in ipairs(ServersList) do
+
+            -- Check again before teleporting
+            if not CanServerHop() then
+                break
+            end
+
+            if
+                Server.id
+                and Server.id ~= game.JobId
+                and Server.playing
+                and Server.playing >= 1
+                and Server.playing <= 2
+                and not IgnoredServers[Server.id]
+            then
+
+                -- Mark server before teleport
+                IgnoredServers[Server.id] = os.time()
+
+                UpdateIgnoredServers(
+                    IgnoredServers
                 )
-            end)
 
-            if not success or not result or not result.data then
-                print("[DEBUG ServerHop] API Error.")
+                -- Send Server Hop notification via Webhook
+                SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
 
-                Library:Notify({
-                    Title = "API Error",
-                    Description = "Failed to fetch servers. Retrying...",
-                    Time = 3,
-                })
+                TeleportService:TeleportToPlaceInstance(
+                    game.PlaceId,
+                    Server.id,
+                    Players.LocalPlayer
+                )
 
-                task.wait(3)
-
-            else
-                local ServersList = result.data
-                local serverFound = false
-
-                print(string.format(
-                    "[DEBUG ServerHop] Fetched %d servers.",
-                    #ServersList
-                ))
-
-                for _, Server in ipairs(ServersList) do
-                    if not CanServerHop() then
-                        break
-                    end
-
-                    local isValid =
-                        Server.id
-                        and Server.id ~= game.JobId
-                        and Server.playing
-                        and Server.playing >= 1
-                        and Server.playing <= MAX_SERVER_PLAYERS
-                        and Server.maxPlayers
-                        and Server.playing < Server.maxPlayers
-
-                    if isValid then
-                        local available =
-                            IsServerAvailable(Server.id)
-
-                        if available then
-                            serverFound = true
-
-                            print(string.format(
-                                "[DEBUG ServerHop] Server found: %s | %d/%d",
-                                Server.id,
-                                Server.playing,
-                                Server.maxPlayers
-                            ))
-
-                            IgnoredServers[Server.id] = os.time()
-                            UpdateIgnoredServers(IgnoredServers)
-
-                            SendDiscordWebhook(
-                                "🔄 Server Hopping",
-                                "Attempting to join server: `"
-                                    .. Server.id
-                                    .. "`\nPlayers: "
-                                    .. Server.playing
-                                    .. "/"
-                                    .. Server.maxPlayers
-                            )
-
-                            local teleportSuccess, teleportMsg =
-                                TeleportWithRetry(
-                                    Server.id,
-                                    RetryConfig.MaxRetries
-                                )
-
-                            if teleportSuccess then
-                                RetryState.ConsecutiveFailures = 0
-                                RetryState.LastAttemptTime = os.time()
-
-                                print("[DEBUG ServerHop] Teleport request sent.")
-                                return
-                            end
-
-                            RetryState.FailedServers[Server.id] = os.time()
-                            RetryState.ConsecutiveFailures += 1
-                            RetryState.LastAttemptTime = os.time()
-
-                            print(string.format(
-                                "[DEBUG ServerHop] Failed: %s | %d/%d failures",
-                                teleportMsg,
-                                RetryState.ConsecutiveFailures,
-                                RetryConfig.MaxConsecutiveFailures
-                            ))
-
-                            if RetryState.ConsecutiveFailures >= RetryConfig.MaxConsecutiveFailures then
-                                RetryState.IsInCooldown = true
-
-                                Library:Notify({
-                                    Title = "Cooldown",
-                                    Description = string.format(
-                                        "Too many failures. Cooling down for %ds.",
-                                        RetryConfig.CooldownPeriod
-                                    ),
-                                    Time = 5,
-                                })
-
-                                SendDiscordWebhook(
-                                    "⚠️ Cooldown Activated",
-                                    string.format(
-                                        "Too many failed attempts (%d). Cooldown for %ds.",
-                                        RetryState.ConsecutiveFailures,
-                                        RetryConfig.CooldownPeriod
-                                    )
-                                )
-
-                                task.wait(RetryConfig.CooldownPeriod)
-
-                                RetryState.IsInCooldown = false
-                                RetryState.ConsecutiveFailures = 0
-                            end
-
-                            Library:Notify({
-                                Title = "Teleport Failed",
-                                Description = string.format(
-                                    "Server %s: %s (%d/%d failures)",
-                                    string.sub(Server.id, 1, 8) .. "...",
-                                    teleportMsg,
-                                    RetryState.ConsecutiveFailures,
-                                    RetryConfig.MaxConsecutiveFailures
-                                ),
-                                Time = 3,
-                            })
-                        end
-                    end
-                end
-
-                if not serverFound then
-                    cursor = result.nextPageCursor or ""
-
-                    if cursor == "" then
-                        task.wait(2)
-                    else
-                        task.wait(0.5)
-                    end
-                end
+                return
             end
         end
+
+        --==================================================
+        -- NEXT PAGE
+        --==================================================
+
+        cursor = result.nextPageCursor
+
+        if not cursor then
+
+            -- Start pagination again
+            cursor = ""
+
+            task.wait(1)
+        else
+
+            task.wait(0.2)
+        end
     end
-
-    ServerHopPending = false
-    ServerHopPendingSince = 0
-
-    print("[DEBUG ServerHop] Loop berhenti.")
 end
 
 --==================================================
@@ -946,32 +671,23 @@ end
 --==================================================
 
 AutoFarmGroup:AddToggle("EnableAutoFarm", {
-    Text = "Auto Farm",
-    Tooltip = "Automatically finish as Survivor",
-    Default = false,
+    Text = "Enable Auto Farm",
+    Tooltip = "Teleport Survivor to the detected finish location",
 
-    Callback = function(Value)
-        if not Value then
-            BeatState.BeatSurvivorDone = false
-            BeatState.LastFinishPos = nil
-            BeatState.FinishPending = false
-            BeatState.FinishPendingSince = 0
-        end
-    end,
+    Default = false,
 })
 
 --==================================================
--- AUTO SERVER HOP TOGGLE
+-- AUTO SERVERHOP
 --==================================================
 
 AutoFarmGroup:AddToggle("ServerHop", {
     Text = "Server Hop",
-    Tooltip = "Hop to 1-2 player servers as Spectator or Killer",
+    Tooltip = "Hop to 1-2 player servers as Spectator",
+
     Default = false,
 
     Callback = function(Value)
-        ServerHopPending = false
-        ServerHopPendingSince = 0
 
         if Value then
             task.spawn(function()
@@ -1001,7 +717,7 @@ local function QueueAutoExecute()
 
     if type(queue_on_teleport) ~= "function" then
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "queue_on_teleport is not available.",
             Time = 5,
         })
@@ -1021,13 +737,13 @@ loadstring(game:HttpGet(%q))()
         AutoExecuteQueued = true
 
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "Script queued for the next teleport.",
             Time = 3,
         })
     else
         Library:Notify({
-            Title = "Auto Execute",
+            Title = "Auto Execute   \n",
             Description = "Failed to queue script: " .. tostring(err),
             Time = 5,
         })
@@ -1037,6 +753,7 @@ end
 AutoFarmGroup:AddToggle("AutoExecute", {
     Text = "Auto Execute",
     Tooltip = "Automatically execute the script after server hop",
+
     Default = false,
 
     Callback = function(Value)
@@ -1049,41 +766,40 @@ AutoFarmGroup:AddToggle("AutoExecute", {
 })
 
 --==================================================
--- WEBHOOK UI
+-- WEBHOOK GROUPBOX SETUP
 --==================================================
 
 WebhookGroup:AddToggle("EnableWebhook", {
     Text = "Enable Webhook",
     Tooltip = "Enable webhook notifications",
+
     Default = false,
 })
 
 WebhookGroup:AddInput("WebhookLink", {
     Text = "Webhook Link",
+
     Default = "",
     Placeholder = "Enter webhook URL...",
+
     Numeric = false,
     Finished = false,
     ClearTextOnFocus = false,
 })
 
 WebhookGroup:AddButton("Test Webhook", function()
-    local ok, msg = SendDiscordWebhook(
-        "🔔 Webhook Test",
-        "Webhook configuration test from **VD Auto Farm** UI!",
-        true
-    )
-
+    local ok, msg = SendDiscordWebhook("🔔 Webhook Test", "Webhook configuration test from **VD Auto Farm** UI!", true)
+    
     if ok then
         Library:Notify({
-            Title = "Webhook Success",
+            Title = "Webhook Success   \n",
             Description = "Test message sent to Discord!",
             Icon = "check",
             Time = 4,
         })
     else
         Library:Notify({
-            Title = "Webhook Failed",
+            Title = "Webhook Failed   \n",
             Description = msg,
             Icon = "x",
             Time = 5,
@@ -1095,7 +811,8 @@ end)
 -- SETTINGS
 --==================================================
 
-local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
+local MenuGroup =
+    Tabs.Settings:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", {
     Default = Library.KeybindFrame.Visible,
@@ -1120,6 +837,7 @@ MenuGroup:AddDropdown("NotificationSide", {
         "Left",
         "Right",
     },
+
     Default = "Right",
     Text = "Notification Side",
 
@@ -1129,29 +847,22 @@ MenuGroup:AddDropdown("NotificationSide", {
 })
 
 MenuGroup:AddDropdown("DPIDropdown", {
-    Values = {
-        "50%",
-        "75%",
-        "100%",
-        "125%",
-        "150%",
-        "175%",
-        "200%",
-    },
-    Default = "100%",
-    Text = "DPI Scale",
+	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+	Default = "100%",
 
-    Callback = function(Value)
-        local DPI = tonumber(Value:gsub("%%", ""))
+	Text = "DPI Scale",
 
-        if DPI then
-            Library:SetDPIScale(DPI)
-        end
-    end,
-})
+	Callback = function(Value)
+		Value = Value:gsub("%%", "")
+		local DPI = tonumber(Value)
+
+		Library:SetDPIScale(DPI)
+	end,
+}
 
 MenuGroup:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
+
     Default = Library.CornerRadius,
     Min = 0,
     Max = 20,
@@ -1164,11 +875,12 @@ MenuGroup:AddSlider("UICornerSlider", {
 
 MenuGroup:AddDivider()
 
-MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
-    Default = "RightShift",
-    NoUI = true,
-    Text = "Menu keybind",
-})
+MenuGroup:AddLabel("Menu bind")
+    :AddKeyPicker("MenuKeybind", {
+        Default = "RightShift",
+        NoUI = true,
+        Text = "Menu keybind",
+    })
 
 MenuGroup:AddButton("Unload", function()
     Library:Unload()
@@ -1199,18 +911,15 @@ ThemeManager:ApplyToTab(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
 --==================================================
--- INITIALIZE
+-- INITIALIZE AUTO EXECUTE & EXECUTION NOTIFY
 --==================================================
 
 QueueAutoExecute()
 
+-- Send execution log if webhook is enabled on load
 task.spawn(function()
-    task.wait(2)
-
-    SendDiscordWebhook(
-        "🎮 Script Executed",
-        "VD Auto Farm Loader successfully initialized."
-    )
+    task.wait(2) -- Wait for UI Config to auto load
+    SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
 end)
 
 --==================================================
@@ -1222,20 +931,6 @@ task.spawn(function()
         pcall(function()
             BeatGameSurvivor()
         end)
-
         task.wait(0.1)
     end
 end)
-
---==================================================
--- RETURN
---==================================================
-
-return {
-    ServerHop = ServerHop,
-    TeleportWithRetry = TeleportWithRetry,
-    RetryState = RetryState,
-    RetryConfig = RetryConfig,
-    CleanFailedServers = CleanFailedServers,
-    IsServerAvailable = IsServerAvailable,
-}
