@@ -2,6 +2,27 @@
 -- OBSIDIAN UI + BEAT SURVIVOR
 --==================================================
 
+-- Enable detailed error logging
+local oldPrint = print
+print = function(...)
+    local args = {...}
+    local str = ""
+    for i, v in ipairs(args) do
+        str = str .. tostring(v) .. "\t"
+    end
+    oldPrint("[DEBUG]", str)
+end
+
+-- Wrap main code dengan pcall
+local success, err = pcall(function()
+    -- Semua kode utama di sini
+end)
+
+if not success then
+    oldPrint("SCRIPT ERROR:", err)
+    oldPrint("Stack trace:", debug.traceback())
+end
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
