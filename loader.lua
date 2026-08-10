@@ -223,10 +223,11 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
 end
 
 --==================================================
--- BEAT GAME SURVIVOR
+-- BEAT GAME SURVIVOR (DEBUG VERSION)
 --==================================================
 
 local function BeatGameSurvivor()
+    -- 1. CEK TOGGLE AUTO FARM
     if not Toggles.EnableAutoFarm.Value then
         BeatState.BeatSurvivorDone = false
         BeatState.LastFinishPos = nil
@@ -235,61 +236,60 @@ local function BeatGameSurvivor()
         return
     end
 
-    if GetRole() ~= "Survivor" then
-        BeatState.FinishPending = false
-        BeatState.FinishPendingSince = 0
-
-        print("Gagal TP: Role kamu adalah " .. tostring(role))
-        return
-    end
-
+    -- 2. CEK ROLE PLAYER
     local role = GetRole()
     if role ~= "Survivor" then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
-        print("Gagal TP: Role kamu adalah " .. tostring(role))
+        print("[DEBUG AutoFarm] ❌ Gagal TP: Role kamu adalah '" .. tostring(role) .. "' (Harus 'Survivor')")
         return
     end
 
+    -- 3. CEK CHARACTER ROOT
     local root = GetCharacterRoot()
-
     if not root then
+        print("[DEBUG AutoFarm] ❌ Gagal TP: HumanoidRootPart tidak ditemukan!")
         return
     end
 
+    -- 4. CEK WORKSPACE MAP
     local Workspace = game:GetService("Workspace")
-    local map = Workspace:FindFirstChild("Map")
+    local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("map")
 
     if not map then
+        print("[DEBUG AutoFarm] ❌ Gagal TP: Folder 'Map' / 'map' tidak ditemukan di Workspace!")
         return
     end
 
     local exitPos = nil
+    local detectorUsed = "None"
 
+    -- 5. PROSES DETEKSI FINISH LINE
     pcall(function()
-        -- MAP DETECTOR #1 - Rooftop
-        if map:FindFirstChild("RooftopHitbox")
-            or map:FindFirstChild("Rooftop") then
+        -- DETECTOR #1 - Rooftop
+        if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
             exitPos = Vector3.new(3098.16, 454.04, -4918.74)
+            detectorUsed = "#1 Rooftop"
             return
         end
 
-        -- MAP DETECTOR #2 - HooksMeat
+        -- DETECTOR #2 - HooksMeat
         if map:FindFirstChild("HooksMeat") then
             exitPos = Vector3.new(1546.12, 152.21, -796.72)
+            detectorUsed = "#2 HooksMeat"
             return
         end
 
-        -- MAP DETECTOR #3 - Churchbell
+        -- DETECTOR #3 - Churchbell
         if map:FindFirstChild("churchbell") then
             exitPos = Vector3.new(760.98, -20.14, -78.48)
+            detectorUsed = "#3 Churchbell"
             return
         end
 
-        -- MAP DETECTOR #4 - Finishline
-        local finish =
-            map:FindFirstChild("Finishline")
-            or map:FindFirstChild("FinishLine")
+        -- DETECTOR #4 - Finishline Name
+        local finish = map:FindFirstChild("Finishline") 
+            or map:FindFirstChild("FinishLine") 
             or map:FindFirstChild("Fininshline")
 
         if finish then
@@ -297,65 +297,64 @@ local function BeatGameSurvivor()
                 exitPos = finish.Position
             elseif finish:IsA("Model") then
                 local part = finish:FindFirstChildWhichIsA("BasePart")
-
-                if part then
-                    exitPos = part.Position
-                end
+                if part then exitPos = part.Position end
             end
-
+            detectorUsed = "#4 Finishline Object (" .. finish.Name .. ")"
             return
         end
 
-        -- MAP DETECTOR #5 - Any descendant containing "finish"
+        -- DETECTOR #5 - Any Descendant containing "finish"
         for _, obj in ipairs(map:GetDescendants()) do
             if obj.Name:lower():find("finish") then
                 if obj:IsA("BasePart") then
                     exitPos = obj.Position
+                    detectorUsed = "#5 Descendant (" .. obj.Name .. ")"
                     break
                 elseif obj:IsA("Model") then
                     local part = obj:FindFirstChildWhichIsA("BasePart")
-
                     if part then
                         exitPos = part.Position
+                        detectorUsed = "#5 Descendant Model (" .. obj.Name .. ")"
                         break
                     end
                 end
             end
         end
 
-        -- MAP DETECTOR #6 - Limestone fallback
+        -- DETECTOR #6 - Limestone Fallback
         if not exitPos then
             for _, obj in ipairs(map:GetDescendants()) do
-                if obj:IsA("MeshPart")
-                    and obj.Material == Enum.Material.Limestone then
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
                     exitPos = Vector3.new(-947.90, 152.12, -7579.52)
+                    detectorUsed = "#6 Limestone Material"
                     break
                 end
             end
         end
 
-        -- MAP DETECTOR #7 - Leather fallback
+        -- DETECTOR #7 - Leather Fallback
         if not exitPos then
             for _, obj in ipairs(map:GetDescendants()) do
-                if obj:IsA("MeshPart")
-                    and obj.Material == Enum.Material.Leather then
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
                     exitPos = Vector3.new(1546.12, 152.21, -796.72)
+                    detectorUsed = "#7 Leather Material"
                     break
                 end
             end
         end
     end)
 
+    -- CEK APARAH EXIT POS KETEMU
     if not exitPos then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
+        print("[DEBUG AutoFarm] ⚠️ Gagal TP: Map ditemukan, tapi tidak ada 1 pun dari 7 Detector Finish Line yang cocok!")
         return
     end
 
-    -- FINISH POSITION CHANGE CHECK
+    -- CEK APAKAH SUDAH SELESAI / BELUM
     if BeatState.LastFinishPos then
         local dist = (exitPos - BeatState.LastFinishPos).Magnitude
-
         if dist > 50 then
             BeatState.BeatSurvivorDone = false
         end
@@ -367,44 +366,49 @@ local function BeatGameSurvivor()
         return
     end
 
-    -- START 5 SECOND COUNTDOWN
+    -- 6. DELAY 5 DETIK COUNTDOWN
     if not BeatState.FinishPending then
         BeatState.FinishPending = true
         BeatState.FinishPendingSince = os.clock()
+        print("[DEBUG AutoFarm] ⏳ Finish line ditemukan via " .. detectorUsed .. "! Menunggu delay 5 detik...")
         return
     end
 
-    if os.clock() - BeatState.FinishPendingSince < 5 then
+    local elapsedTime = os.clock() - BeatState.FinishPendingSince
+    if elapsedTime < 5 then
+        -- Masih dalam masa jeda 5 detik
         return
     end
 
-    -- RE-CHECK BEFORE TELEPORT
+    -- 7. RE-CHECK SEBELUM TELEPORT
     if not Toggles.EnableAutoFarm.Value then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
+        print("[DEBUG AutoFarm] 🛑 Teleport dibatalkan: Toggle dimatikan saat countdown.")
         return
     end
 
-    local role = GetRole()
-    if role ~= "Survivor" then
+    local finalRole = GetRole()
+    if finalRole ~= "Survivor" then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
-        print("Gagal TP: Role kamu adalah " .. tostring(role))
+        print("[DEBUG AutoFarm] 🛑 Teleport dibatalkan: Role berubah menjadi '" .. tostring(finalRole) .. "'")
         return
     end
 
     local currentRoot = GetCharacterRoot()
-
     if not currentRoot then
         BeatState.FinishPending = false
         BeatState.FinishPendingSince = 0
+        print("[DEBUG AutoFarm] 🛑 Teleport dibatalkan: Character hilang/respawn saat countdown.")
         return
     end
 
-    -- TELEPORT TO FINISH
+    -- 8. EKSEKUSI TELEPORT
     currentRoot.CFrame = CFrame.new(exitPos + Vector3.new(0, 3, 0))
+    print("[DEBUG AutoFarm] ✅ SUCCESS! Teleport ke finish line berhasil! Posisi: " .. tostring(exitPos))
 
-    -- SAVE STATE
+    -- SIMPAN STATE
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
     BeatState.FinishPending = false
