@@ -690,9 +690,11 @@ AutoFarmGroup:AddToggle("ServerHop", {
     Callback = function(Value)
 
         if Value then
+
             task.spawn(function()
                 ServerHop()
             end)
+
         end
     end,
 })
@@ -792,19 +794,102 @@ WebhookGroup:AddButton("Test Webhook", function()
     
     if ok then
         Library:Notify({
-            Title = "Webhook Success   \n",
+            Title = "Webhook Success",
             Description = "Test message sent to Discord!",
             Icon = "check",
             Time = 4,
         })
     else
         Library:Notify({
-            Title = "Webhook Failed   \n",
+            Title = "Webhook Failed",
             Description = msg,
             Icon = "x",
             Time = 5,
         })
     end
+end)
+
+--==================================================
+-- TEST NOTIFICATIONS
+--==================================================
+
+local TestNotificationGroup =
+    Tabs.AutoFarm:AddRightGroupbox("Test Notifications", "bell")
+
+TestNotificationGroup:AddButton("1. Simple", function()
+    Library:Notify({
+        Title = "Server Hop",
+        Description = "Simple notification",
+        Time = 4,
+    })
+end)
+
+TestNotificationGroup:AddButton("2. Icon", function()
+    Library:Notify({
+        Title = "Server Hop",
+        Description = "Notification with an icon",
+        Icon = "info",
+        Time = 4,
+    })
+end)
+
+TestNotificationGroup:AddButton("3. Big Icon", function()
+    Library:Notify({
+        Title = "Server Hop",
+        Description = "Notification with a big icon",
+        BigIcon = "rbxassetid://10204738596",
+        IconColor = Color3.new(0, 1, 0),
+        Time = 4,
+    })
+end)
+
+TestNotificationGroup:AddButton("4. Persistent", function()
+    local Notification = Library:Notify({
+        Title = "Server Hop",
+        Description = "Persistent notification",
+        Persist = true,
+    })
+
+    task.delay(5, function()
+        if Notification then
+            Notification:Destroy()
+        end
+    end)
+end)
+
+TestNotificationGroup:AddButton("5. Update", function()
+    local Notification = Library:Notify({
+        Title = "Server Hop",
+        Description = "Waiting...",
+        Persist = true,
+    })
+
+    task.delay(2, function()
+        Notification:ChangeTitle("Server Hop - Updated")
+        Notification:ChangeDescription("Notification has been updated!")
+    end)
+
+    task.delay(5, function()
+        Notification:Destroy()
+    end)
+end)
+
+TestNotificationGroup:AddButton("6. Progress", function()
+    local Notification = Library:Notify({
+        Title = "Server Hop",
+        Description = "Testing progress...",
+        Steps = 10,
+    })
+
+    task.spawn(function()
+        for i = 1, 10 do
+            Notification:ChangeStep(i)
+            task.wait(0.3)
+        end
+
+        task.wait(1)
+        Notification:Destroy()
+    end)
 end)
 
 --==================================================
@@ -858,7 +943,7 @@ MenuGroup:AddDropdown("DPIDropdown", {
 
 		Library:SetDPIScale(DPI)
 	end,
-}
+})
 
 MenuGroup:AddSlider("UICornerSlider", {
     Text = "Corner Radius",
