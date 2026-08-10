@@ -523,9 +523,10 @@ TimeUpdateEvent.OnClientEvent:Connect(function(Status)
 end)
 
 --==================================================
--- SERVER HOP PERMISSION
+-- SERVER HOP SYSTEM (DEBUG VERSION)
 --==================================================
 
+-- 1. CEK SYARAT SERVER HOP
 local function CanServerHop()
     local role = GetRole()
 
@@ -533,25 +534,22 @@ local function CanServerHop()
         return false
     end
 
-    if role == "Killer" then
-        return IsRound
-    end
-
-    if role == "Spectator" then
-        return IsRound
+    if role == "Killer" or role == "Spectator" then
+        if not IsRound then
+            return false
+        end
+        return true
     end
 
     return false
 end
 
---==================================================
--- SERVER HOP DELAY
---==================================================
-
+-- 2. WAIT DELAY DENGAN DEBUG
 local function WaitForServerHopDelay()
     if not ServerHopPending then
         ServerHopPending = true
         ServerHopPendingSince = os.clock()
+        print("[DEBUG ServerHop] ⏳ Memulai delay sebelum Server Hop (2s)...")
         return false
     end
 
@@ -562,96 +560,33 @@ local function WaitForServerHopDelay()
     if not Toggles.ServerHop.Value then
         ServerHopPending = false
         ServerHopPendingSince = 0
+        print("[DEBUG ServerHop] 🛑 Cancel: Toggle ServerHop dimatikan.")
         return false
     end
 
     if not CanServerHop() then
         ServerHopPending = false
         ServerHopPendingSince = 0
+        print("[DEBUG ServerHop] 🛑 Cancel: Syarat CanServerHop() bernilai false (Role/Round tidak sesuai).")
         return false
     end
 
     ServerHopPending = false
     ServerHopPendingSince = 0
-
     return true
 end
 
---==================================================
--- SERVER HOP RETRY MECHANISM
---==================================================
-
-local RetryConfig = {
-    MaxRetries = 3,
-    RetryDelay = 2,
-    BackoffMultiplier = 1.5,
-    MaxConsecutiveFailures = 5,
-    CooldownPeriod = 30,
-}
-
-local RetryState = {
-    CurrentRetries = 0,
-    ConsecutiveFailures = 0,
-    FailedServers = {},
-    LastAttemptTime = 0,
-    IsInCooldown = false,
-}
-
---==================================================
--- CLEAN FAILED SERVERS
---==================================================
-
-local function CleanFailedServers()
-    local now = os.time()
-    local expiredTime = 300
-
-    for serverId, timestamp in pairs(RetryState.FailedServers) do
-        if now - timestamp > expiredTime then
-            RetryState.FailedServers[serverId] = nil
-        end
-    end
-end
-
---==================================================
--- CHECK SERVER AVAILABILITY
---==================================================
-
-local function IsServerAvailable(serverId)
-    if IgnoredServers[serverId] then
-        return false, "Server already ignored"
-    end
-
-    if RetryState.FailedServers[serverId] then
-        local timeSinceFailure =
-            os.time() - RetryState.FailedServers[serverId]
-
-        if timeSinceFailure < 60 then
-            return false, "Server in cooldown period"
-        end
-    end
-
-    return true, nil
-end
-
---==================================================
--- TELEPORT WITH RETRY
---==================================================
-
+-- 3. TELEPORT WITH RETRY DENGAN DEBUG
 local function TeleportWithRetry(serverId, maxRetries)
     local retryCount = 0
     local currentDelay = RetryConfig.RetryDelay
 
     while retryCount <= maxRetries do
         if retryCount > 0 then
+            print(string.format("[DEBUG ServerHop] 🔄 Retry attempt %d/%d ke server %s (Delay: %.1fs)", retryCount, maxRetries, serverId, currentDelay))
             Library:Notify({
                 Title = "Retry Attempt",
-                Description = string.format(
-                    "Retry %d/%d for server %s (Delay: %.1fs)",
-                    retryCount,
-                    maxRetries,
-                    serverId,
-                    currentDelay
-                ),
+                Description = string.format("Retry %d/%d for server %s (Delay: %.1fs)", retryCount, maxRetries, serverId, currentDelay),
                 Time = 3,
             })
 
@@ -659,6 +594,8 @@ local function TeleportWithRetry(serverId, maxRetries)
             currentDelay = currentDelay * RetryConfig.BackoffMultiplier
         end
 
+        print(string.format("[DEBUG ServerHop] 🚀 Mengirim request Teleport ke Server ID: %s", serverId))
+        
         local success, errorResult = pcall(function()
             TeleportService:TeleportToPlaceInstance(
                 game.PlaceId,
@@ -668,6 +605,7 @@ local function TeleportWithRetry(serverId, maxRetries)
         end)
 
         if success then
+            print("[DEBUG ServerHop] ✅ Teleport request berhasil dikirim!")
             return true, "Teleport successful"
         end
 
@@ -675,84 +613,42 @@ local function TeleportWithRetry(serverId, maxRetries)
         RetryState.CurrentRetries = retryCount
 
         local errorMsg = tostring(errorResult)
+        print(string.format("[DEBUG ServerHop] ❌ Gagal Teleport ke %s: %s", serverId, errorMsg))
 
-        if errorMsg:find("TeleportThrottled")
-            or errorMsg:find("TooManyRequests") then
+        if errorMsg:find("TeleportThrottled") or errorMsg:find("TooManyRequests") then
             currentDelay = math.max(currentDelay, 5)
-
-            Library:Notify({
-                Title = "Rate Limited",
-                Description = "Teleport throttled, increasing delay...",
-                Time = 3,
-            })
-        elseif errorMsg:find("ServerFull")
-            or errorMsg:find("ServerClosed") then
+            print("[DEBUG ServerHop] ⚠️ Rate limited / Throttled oleh Roblox. Menambah delay retry...")
+        elseif errorMsg:find("ServerFull") or errorMsg:find("ServerClosed") then
+            print("[DEBUG ServerHop] ⚠️ Server penuh atau telah ditutup.")
             return false, "Server full or closed"
-        elseif errorMsg:find("NetworkError")
-            or errorMsg:find("Timeout") then
-            Library:Notify({
-                Title = "Network Error",
-                Description = "Connection issue, retrying...",
-                Time = 3,
-            })
+        elseif errorMsg:find("NetworkError") or errorMsg:find("Timeout") then
+            print("[DEBUG ServerHop] ⚠️ Masalah jaringan / Timeout.")
         end
     end
 
     return false, "Max retries exceeded"
 end
 
---==================================================
--- SERVER HOP RETRY STATE
---==================================================
-
-local function ServerHopWithRetry()
-    if RetryState.IsInCooldown then
-        local timeSinceLastAttempt =
-            os.time() - RetryState.LastAttemptTime
-
-        if timeSinceLastAttempt < RetryConfig.CooldownPeriod then
-            local remainingCooldown =
-                RetryConfig.CooldownPeriod - timeSinceLastAttempt
-
-            Library:Notify({
-                Title = "Cooldown Active",
-                Description = string.format(
-                    "Too many failures. Cooling down... (%ds remaining)",
-                    remainingCooldown
-                ),
-                Time = 3,
-            })
-
-            return false
-        end
-
-        RetryState.IsInCooldown = false
-        RetryState.ConsecutiveFailures = 0
-    end
-
-    CleanFailedServers()
-    return true
-end
-
---==================================================
--- MAIN SERVER HOP
---==================================================
-
+-- 4. FUNGSI UTAMA SERVER HOP DENGAN DEBUG
 local function ServerHop()
     local cursor = ""
     local attemptCount = 0
 
+    print("[DEBUG ServerHop] 🟢 Loop ServerHop() dimulai.")
+
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not ServerHopWithRetry() then
+            print("[DEBUG ServerHop] ⏳ Masih dalam masa Cooldown, menunggu 1 detik...")
             task.wait(1)
         elseif not CanServerHop() then
             ServerHopPending = false
             ServerHopPendingSince = 0
-            task.wait(0.1)
+            task.wait(0.5)
         elseif not WaitForServerHopDelay() then
             task.wait(0.1)
         else
             attemptCount = attemptCount + 1
+            print(string.format("[DEBUG ServerHop] 🌐 Fetching server list dari API Roblox (Percobaan ke-%d)...", attemptCount))
 
             local success, result = pcall(function()
                 local url =
@@ -763,12 +659,12 @@ local function ServerHop()
                     .. "&excludeFullGames=true"
                     .. "&cursor=" .. cursor
 
+                -- Menggunakan JSONDecode (Fix dari bug sebelumnya)
                 return HttpService:JSONDecode(game:HttpGet(url))
             end)
 
-            if not success
-                or not result
-                or not result.data then
+            if not success or not result or not result.data then
+                print("[DEBUG ServerHop] ❌ Gagal mengambil data dari API Roblox! (pcall error / result nil)")
                 Library:Notify({
                     Title = "API Error",
                     Description = "Failed to fetch servers. Retrying...",
@@ -779,9 +675,11 @@ local function ServerHop()
             else
                 local ServersList = result.data
                 local serverFound = false
+                print(string.format("[DEBUG ServerHop] 📊 Berhasil fetch %d server dari API.", #ServersList))
 
                 for _, Server in ipairs(ServersList) do
                     if not CanServerHop() then
+                        print("[DEBUG ServerHop] 🛑 Scan server dihentikan karena CanServerHop() bernilai false.")
                         break
                     end
 
@@ -795,11 +693,11 @@ local function ServerHop()
                         and Server.playing < Server.maxPlayers
 
                     if isValid then
-                        local available, reason =
-                            IsServerAvailable(Server.id)
+                        local available, reason = IsServerAvailable(Server.id)
 
                         if available then
                             serverFound = true
+                            print(string.format("[DEBUG ServerHop] 🎯 Server cocok ditemukan! ID: %s | Players: %d/%d", Server.id, Server.playing, Server.maxPlayers))
 
                             IgnoredServers[Server.id] = os.time()
                             UpdateIgnoredServers(IgnoredServers)
@@ -823,17 +721,18 @@ local function ServerHop()
                             if teleportSuccess then
                                 RetryState.ConsecutiveFailures = 0
                                 RetryState.LastAttemptTime = os.time()
+                                print("[DEBUG ServerHop] 🎉 Teleportasi selesai / berpindah server!")
                                 return
                             end
 
+                            print(string.format("[DEBUG ServerHop] ⚠️ Teleportasi gagal ke server %s: %s", Server.id, teleportMsg))
                             RetryState.FailedServers[Server.id] = os.time()
-                            RetryState.ConsecutiveFailures =
-                                RetryState.ConsecutiveFailures + 1
+                            RetryState.ConsecutiveFailures = RetryState.ConsecutiveFailures + 1
                             RetryState.LastAttemptTime = os.time()
 
-                            if RetryState.ConsecutiveFailures
-                                >= RetryConfig.MaxConsecutiveFailures then
+                            if RetryState.ConsecutiveFailures >= RetryConfig.MaxConsecutiveFailures then
                                 RetryState.IsInCooldown = true
+                                print(string.format("[DEBUG ServerHop] 🚨 Max gagal berturut-turut tercapai (%d). Masuk ke masa Cooldown selama %ds!", RetryState.ConsecutiveFailures, RetryConfig.CooldownPeriod))
 
                                 Library:Notify({
                                     Title = "Max Failures Reached",
@@ -877,11 +776,11 @@ local function ServerHop()
                 end
 
                 if not serverFound then
-                    cursor = result.nextPageCursor
+                    cursor = result.nextPageCursor or ""
+                    print(string.format("[DEBUG ServerHop] 🔍 Tidak ada server cocok di page ini. Pindah cursor ke: '%s'", cursor))
 
-                    if not cursor then
-                        cursor = ""
-
+                    if cursor == "" then
+                        print("[DEBUG ServerHop] 🔄 Halaman API habis. Mengulangi pencarian dari page pertama...")
                         Library:Notify({
                             Title = "No Servers Found",
                             Description = "No valid 1-2 player servers found. Restarting search...",
@@ -899,6 +798,7 @@ local function ServerHop()
 
     ServerHopPending = false
     ServerHopPendingSince = 0
+    print("[DEBUG ServerHop] 🛑 Loop ServerHop() berhenti.")
 end
 
 --==================================================
