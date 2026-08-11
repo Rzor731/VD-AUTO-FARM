@@ -255,78 +255,41 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     --==================================================
     local payload = {
         ["embeds"] = {{
-            ["title"] =
-                string.format(
-                    "%s · Level %d",
-                    displayName,
-                    Level
+            ["title"] = string.format("%s · Level %d", displayName, Level
                 ),
-            ["url"] =
-                profileUrl,
-            ["color"] =
-                3638942,
+            ["url"] = profileUrl,
+            ["color"] = 3638942,
             ["fields"] = {
                 {
                     ["name"] = "💀 SIN",
-                    ["value"] =
-                        string.format(
-                            "%s (**%+d**)",
-                            tostring(KillerChance),
-                            KillerChanceDelta
-                        ),
+                    ["value"] = string.format("%s (**%+d**)", tostring(KillerChance), KillerChanceDelta),
                     ["inline"] = false
                 },
                 {
                     ["name"] = "🧪 EXP",
-                    ["value"] =
-                        string.format(
-                            "%s (**%+d**)",
-                            tostring(EXP),
-                            EXPDelta
-                        ),
+                    ["value"] = string.format("%s (**%+d**)", tostring(EXP), EXPDelta),
                     ["inline"] = false
                 },
                 {
                     ["name"] = "🪛 Screws",
-                    ["value"] =
-                        string.format(
-                            "%s (**%+d**)",
-                            tostring(Screws),
-                            ScrewsDelta
-                        ),
+                    ["value"] = string.format("%s (**%+d**)", tostring(Screws), ScrewsDelta),
                     ["inline"] = false
                 },
                 {
                     ["name"] = "⚙️ Gears",
-                    ["value"] =
-                        string.format(
-                            "%s (**%+d**)",
-                            tostring(Gears),
-                            GearsDelta
-                        ),
+                    ["value"] = string.format("%s (**%+d**)", tostring(Gears), GearsDelta),
                     ["inline"] = false
                 },
                 {
-                    ["name"] = "🆔 Server ID",
-                    ["value"] =
-                        string.format(
-                            "`\n%s\n`",
-                            serverId
-                        ),
-                    ["inline"] = false
-                }
+	                ["name"] = "🆔 Server ID",
+	                ["value"] = string.format("```\n%s\n```", serverId),
+	                ["inline"] = false
+	            }
             },
             ["footer"] = {
-                ["text"] =
-                    string.format(
-                        "VD Auto Farm · %s",
-                        GetExecutorName()
-                    )
+                ["text"] = string.format("VD Auto Farm · %s", GetExecutorName())
             },
-            ["timestamp"] =
-                os.date(
-                    "!%Y-%m-%dT%H:%M:%S.000Z"
-                )
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S.000Z")
         }}
     }
     --==================================================
