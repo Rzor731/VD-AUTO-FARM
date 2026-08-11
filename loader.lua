@@ -471,7 +471,7 @@ local function BeatGameSurvivor()
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
 
-	task.wait(3)
+	task.wait(5)
 	
     SendDiscordWebhook()
 end
