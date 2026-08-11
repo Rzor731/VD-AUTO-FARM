@@ -271,7 +271,7 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
                     ["inline"] = false
                 },
                 {
-                    ["name"] = "🪛 Screws",
+                    ["name"] = "🔩 Screws",
                     ["value"] = string.format("%s (**%+d**)", tostring(Screws), ScrewsDelta),
                     ["inline"] = false
                 },
