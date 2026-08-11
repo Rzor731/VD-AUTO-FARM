@@ -84,99 +84,230 @@ local function GetExecutorName()
         or "Unknown Executor"
 end
 --==================================================
--- WEBHOOK ATTRIBUTE STATE
+-- WEBHOOK ATTRIBUTE STATE (PERSISTENT)
 --==================================================
-local PreviousAttributes = {
-    KillerChance = nil,
-    EXP = nil,
-    Screws = nil,
-    Gears = nil
-}
+
+local ATTRIBUTE_FILE = "VD_AutoFarm_Attributes.json"
+
+local PreviousAttributes = nil
+
+--==================================================
+-- LOAD PREVIOUS ATTRIBUTES
+--==================================================
+
+local function LoadPreviousAttributes()
+    if type(isfile) ~= "function"
+    or type(readfile) ~= "function" then
+        return nil
+    end
+
+    if not isfile(ATTRIBUTE_FILE) then
+        return nil
+    end
+
+    local HttpService = game:GetService("HttpService")
+
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(
+            readfile(ATTRIBUTE_FILE)
+        )
+    end)
+
+    if not success or type(data) ~= "table" then
+        return nil
+    end
+
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+
+    -- Jangan gunakan snapshot milik player lain
+    if tonumber(data.UserId) ~= LocalPlayer.UserId then
+        return nil
+    end
+
+    return {
+        KillerChance = tonumber(data.KillerChance),
+        EXP = tonumber(data.EXP),
+        Screws = tonumber(data.Screws),
+        Gears = tonumber(data.Gears)
+    }
+end
+
+--==================================================
+-- SAVE PREVIOUS ATTRIBUTES
+--==================================================
+
+local function SavePreviousAttributes(attributes)
+    if type(writefile) ~= "function" then
+        return false
+    end
+
+    local HttpService = game:GetService("HttpService")
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+
+    local data = {
+        UserId = LocalPlayer.UserId,
+
+        KillerChance = attributes.KillerChance,
+        EXP = attributes.EXP,
+        Screws = attributes.Screws,
+        Gears = attributes.Gears,
+
+        UpdatedAt = os.time()
+    }
+
+    local success = pcall(function()
+        writefile(
+            ATTRIBUTE_FILE,
+            HttpService:JSONEncode(data)
+        )
+    end)
+
+    return success
+end
+
+-- Load snapshot dari server/session sebelumnya
+PreviousAttributes = LoadPreviousAttributes()
+
+--==================================================
+-- ATTRIBUTE DELTA
+--==================================================
+
 local function GetAttributeDelta(currentValue, previousValue)
     currentValue = tonumber(currentValue) or 0
+
     if previousValue == nil then
         return 0
     end
+
     return currentValue - (tonumber(previousValue) or 0)
 end
+
 --==================================================
 -- WEBHOOK SYSTEM
 --==================================================
+
 local function SendDiscordWebhook(customTitle, customDesc, forceSend)
+
     if not forceSend
-        and (not Toggles.EnableWebhook
-        or not Toggles.EnableWebhook.Value) then
+    and (
+        not Toggles.EnableWebhook
+        or not Toggles.EnableWebhook.Value
+    ) then
         return false, "Webhook Disabled"
     end
+
     local webhookUrl =
         Options.WebhookLink
         and Options.WebhookLink.Value
         or ""
+
     if not webhookUrl
-        or webhookUrl == ""
-        or not string.find(
-            webhookUrl,
-            "discord.com/api/webhooks"
-        ) then
+    or webhookUrl == ""
+    or not string.find(
+        webhookUrl,
+        "discord.com/api/webhooks"
+    ) then
         return false, "Invalid Webhook URL"
     end
+
     local HttpService =
         game:GetService("HttpService")
+
     local Players =
         game:GetService("Players")
+
     local LocalPlayer =
         Players.LocalPlayer
+
     --==================================================
     -- PLAYER INFO
     --==================================================
-    local displayName = LocalPlayer.DisplayName
-	local serverId = game.JobId or "Singleplayer"
-    local userId =LocalPlayer.UserId
+
+    local displayName =
+        LocalPlayer.DisplayName
+
+    local userId =
+        LocalPlayer.UserId
+
+    local serverId =
+        game.JobId ~= ""
+        and game.JobId
+        or "Singleplayer"
+
     local profileUrl =
         "https://www.roblox.com/users/"
         .. userId
         .. "/profile"
+
     --==================================================
-    -- ATTRIBUTES
+    -- READ CURRENT ATTRIBUTES
     --==================================================
+
     local attrs =
         LocalPlayer:GetAttributes()
+
     local KillerChance =
         tonumber(attrs.KillerChance) or 0
+
     local EXP =
         tonumber(attrs.EXP) or 0
+
     local Screws =
         tonumber(attrs.Screws) or 0
+
     local Gears =
         tonumber(attrs.Gears) or 0
+
     local Level =
         tonumber(attrs.Level) or 0
+
+    --==================================================
+    -- FIRST RUN
+    --==================================================
+
+    if not PreviousAttributes then
+
+        PreviousAttributes = {
+            KillerChance = KillerChance,
+            EXP = EXP,
+            Screws = Screws,
+            Gears = Gears
+        }
+
+    end
+
     --==================================================
     -- CALCULATE DELTA
     --==================================================
+
     local KillerChanceDelta =
         GetAttributeDelta(
             KillerChance,
             PreviousAttributes.KillerChance
         )
+
     local EXPDelta =
         GetAttributeDelta(
             EXP,
             PreviousAttributes.EXP
         )
+
     local ScrewsDelta =
         GetAttributeDelta(
             Screws,
             PreviousAttributes.Screws
         )
+
     local GearsDelta =
         GetAttributeDelta(
             Gears,
             PreviousAttributes.Gears
         )
+
     --==================================================
     -- PAYLOAD
     --==================================================
+
     local payload = {
         ["embeds"] = {{
             ["title"] =
@@ -185,102 +316,164 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
                     displayName,
                     Level
                 ),
+
             ["url"] =
                 profileUrl,
+
             ["color"] =
                 3638942,
+
             ["fields"] = {
+
                 {
                     ["name"] = "💀 SIN",
+
                     ["value"] =
                         string.format(
                             "%s (**%+d**)",
                             tostring(KillerChance),
                             KillerChanceDelta
                         ),
+
                     ["inline"] = false
                 },
+
                 {
                     ["name"] = "🧪 EXP",
+
                     ["value"] =
                         string.format(
                             "%s (**%+d**)",
                             tostring(EXP),
                             EXPDelta
                         ),
+
                     ["inline"] = false
                 },
+
                 {
                     ["name"] = "🪛 Screws",
+
                     ["value"] =
                         string.format(
                             "%s (**%+d**)",
                             tostring(Screws),
                             ScrewsDelta
                         ),
+
                     ["inline"] = false
                 },
+
                 {
                     ["name"] = "⚙️ Gears",
+
                     ["value"] =
                         string.format(
                             "%s (**%+d**)",
                             tostring(Gears),
                             GearsDelta
                         ),
+
                     ["inline"] = false
                 },
-				{
-	                ["name"] = "🆔 Server ID",
-	                ["value"] = string.format("```\n%s\n```", serverId),
-	                ["inline"] = false
-	            }
+
+                {
+                    ["name"] = "🆔 Server ID",
+
+                    ["value"] =
+                        string.format(
+                            "`\n%s\n`",
+                            serverId
+                        ),
+
+                    ["inline"] = false
+                }
             },
+
             ["footer"] = {
-                ["text"] = string.format("VD Auto Farm · %s", GetExecutorName())
+                ["text"] =
+                    string.format(
+                        "VD Auto Farm · %s",
+                        GetExecutorName()
+                    )
             },
+
             ["timestamp"] =
-                os.date("!%Y-%m-%dT%H:%M:%S.000Z")
+                os.date(
+                    "!%Y-%m-%dT%H:%M:%S.000Z"
+                )
         }}
     }
+
     --==================================================
-    -- SEND
+    -- SEND WEBHOOK
     --==================================================
-    local response = safeRequest({
-        Url = webhookUrl,
-        Method = "POST",
-        Headers = {
-            ["Content-Type"] = "application/json"
-        },
-        Body =
-            HttpService:JSONEncode(payload)
-    })
+
+    local response =
+        safeRequest({
+            Url = webhookUrl,
+
+            Method = "POST",
+
+            Headers = {
+                ["Content-Type"] =
+                    "application/json"
+            },
+
+            Body =
+                HttpService:JSONEncode(
+                    payload
+                )
+        })
+
     --==================================================
-    -- RESPONSE
+    -- SUCCESS
     --==================================================
+
     if response
-        and (
-            response.StatusCode == 200
-            or response.StatusCode == 204
-        ) then
-		--==================================================
-		-- UPDATE PREVIOUS VALUES
-		--==================================================
-		PreviousAttributes.KillerChance = KillerChance
-		PreviousAttributes.EXP = EXP
-		PreviousAttributes.Screws = Screws
-		PreviousAttributes.Gears = Gears
+    and (
+        response.StatusCode == 200
+        or response.StatusCode == 204
+    ) then
+
+        --==================================================
+        -- ONLY UPDATE AFTER SUCCESS
+        --==================================================
+
+        local newSnapshot = {
+            KillerChance = KillerChance,
+            EXP = EXP,
+            Screws = Screws,
+            Gears = Gears
+        }
+
+        PreviousAttributes =
+            newSnapshot
+
+        SavePreviousAttributes(
+            newSnapshot
+        )
+
         return true,
             "Webhook successfully sent!"
-    else
-        local status =
-            response
-            and response.StatusCode
-            or "No Response / Failed Request"
-        return false,
-            "Failed Status: "
-            .. tostring(status)
+
     end
+
+    --==================================================
+    -- FAILED
+    --==================================================
+
+    local status =
+        response
+        and response.StatusCode
+        or "No Response / Failed Request"
+
+    -- Jangan update PreviousAttributes
+    -- kalau webhook gagal.
+
+    return false,
+        "Failed Status: "
+        .. tostring(status)
 end
 --==================================================
 -- BEAT GAME SURVIVOR
