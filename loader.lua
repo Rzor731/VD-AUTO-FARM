@@ -470,6 +470,9 @@ local function BeatGameSurvivor()
     )
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
+
+	task.wait(3)
+	
     SendDiscordWebhook()
 end
 --==================================================
@@ -599,9 +602,9 @@ local function ServerHop()
                 and not IgnoredServers[Server.id]
             then
                 IgnoredServers[Server.id] = os.time()
-                UpdateIgnoredServers(
-                    IgnoredServers
-                )
+                UpdateIgnoredServers(IgnoredServers)
+
+				task.wait(3)
                 -- SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
@@ -812,7 +815,7 @@ SaveManager:LoadAutoloadConfig()
 --==================================================
 QueueAutoExecute()
 task.spawn(function()
-    task.wait(2)
+    task.wait(3)
     -- SendDiscordWebhook("🎮 Script Executed", "VD Auto Farm Loader successfully initialized.")
 end)
 --==================================================
