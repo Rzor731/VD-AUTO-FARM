@@ -604,7 +604,7 @@ local function ServerHop()
                 IgnoredServers[Server.id] = os.time()
                 UpdateIgnoredServers(IgnoredServers)
 
-				task.wait(3)
+				task.wait(5)
                 -- SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
                 TeleportService:TeleportToPlaceInstance(
                     game.PlaceId,
