@@ -279,12 +279,12 @@ local function SendDiscordWebhook(customTitle, customDesc, forceSend)
                     ["name"] = "⚙️ Gears",
                     ["value"] = string.format("%s (**%+d**)", tostring(Gears), GearsDelta),
                     ["inline"] = false
-                }
-             --    {
-	            --     ["name"] = "🆔 Server ID",
-	            --     ["value"] = string.format("```\n%s\n```", serverId),
-	            --     ["inline"] = false
-	            -- }
+                },
+                {
+	                ["name"] = "🆔 Server ID",
+	                ["value"] = string.format("```\n%s\n```", serverId),
+	                ["inline"] = false
+	            }
             },
             ["footer"] = {
                 ["text"] = string.format("VD Auto Farm · %s", GetExecutorName())
