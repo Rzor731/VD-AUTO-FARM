@@ -478,7 +478,7 @@ local function BeatGameSurvivor()
     end
 
     currentRoot.CFrame = CFrame.new(
-        exitPos + Vector3.new(0, 3, 0)
+        exitPos + Vector3.new(0, 0, 0)
     )
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
