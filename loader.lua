@@ -1,6 +1,10 @@
 --==================================================
 -- OBSIDIAN UI + BEAT SURVIVOR
 --==================================================
+pcall(function()
+    setfflag("TeleportService", "DisableTeleportErrors", "true")
+end)
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
@@ -465,7 +469,15 @@ local function BeatGameSurvivor()
     if BeatState.BeatSurvivorDone then
         return
     end
-    root.CFrame = CFrame.new(
+
+    task.wait(3)
+
+    local currentRoot = GetCharacterRoot()
+    if not currentRoot then
+        return
+    end
+
+    currentRoot.CFrame = CFrame.new(
         exitPos + Vector3.new(0, 3, 0)
     )
     BeatState.BeatSurvivorDone = true
@@ -531,10 +543,13 @@ local TimeUpdateEvent =
 StatusUpdateEvent.OnClientEvent:Connect(function(Status)
     if Status == "WaitingForPlayers" then
         IsRound = false
+        BeatState.BeatSurvivorDone = false
     elseif Status == "IntermissionStarting" then
         IsRound = false
+        BeatState.BeatSurvivorDone = false
     elseif Status == "Intermission" then
         IsRound = false
+        BeatState.BeatSurvivorDone = false
     end
 end)
 --==================================================
@@ -559,67 +574,117 @@ local function CanServerHop()
     return true
 end
 --==================================================
--- SERVER HOP
+-- SERVER HOP (DENGAN RETRY & ERROR HANDLING)
 --==================================================
+
 local function ServerHop()
     local cursor = ""
-    while Toggles.ServerHop.Value
-        and not Library.Unloaded do
+    local maxRetries = 3          -- Maksimal percobaan teleport per server
+    local hopCooldown = 5         -- Jeda antar hop (detik)
+    local rateLimitCooldown = 5  -- Jeda khusus jika terkena rate limit (error 772)
+
+    while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
             task.wait(0.5)
             continue
         end
+
         local success, result = pcall(function()
-            local url =
-                "https://games.roblox.com/v1/games/"
+            local url = "https://games.roblox.com/v1/games/"
                 .. game.PlaceId
                 .. "/servers/Public?limit=100"
                 .. "&sortOrder=Asc"
                 .. "&excludeFullGames=true"
                 .. "&cursor="
                 .. cursor
-            return HttpService:JSONDecode(
-                game:HttpGet(url)
-            )
+            return HttpService:JSONDecode(game:HttpGet(url))
         end)
-        if not success
-            or not result
-            or not result.data then
+
+        if not success or not result or not result.data then
             task.wait(3)
             continue
         end
-        local ServersList = result.data
-        for _, Server in ipairs(ServersList) do
+
+        local serversList = result.data
+        local foundValidServer = false
+
+        for _, server in ipairs(serversList) do
             if not CanServerHop() then
                 break
             end
-            if
-                Server.id
-                and Server.id ~= game.JobId
-                and Server.playing
-                and Server.playing >= 1
-                and Server.playing <= 2
-                and not IgnoredServers[Server.id]
+
+            -- Filter server yang valid
+            if server.id
+                and server.id ~= game.JobId
+                and server.playing
+                and server.playing >= 1
+                and server.playing <= 3
+                and not IgnoredServers[server.id]
             then
-                IgnoredServers[Server.id] = os.time()
+                foundValidServer = true
+                IgnoredServers[server.id] = os.time()
                 UpdateIgnoredServers(IgnoredServers)
 
-				task.wait(5)
-                -- SendDiscordWebhook("🔄 Server Hopping", "Hopping to a new server: `" .. Server.id .. "`")
-                TeleportService:TeleportToPlaceInstance(
-                    game.PlaceId,
-                    Server.id,
-                    Players.LocalPlayer
-                )
-                return
+                task.wait(3)
+
+                local teleportSuccess = false
+                local attempt = 0
+
+                while attempt < maxRetries and not teleportSuccess do
+                    attempt = attempt + 1
+
+                    local teleportOk, teleportErr = pcall(function()
+                        TeleportService:TeleportToPlaceInstance(
+                            game.PlaceId,
+                            server.id,
+                            Players.LocalPlayer
+                        )
+                    end)
+
+                    if teleportOk then
+                        return
+                    else
+                        local errMsg = tostring(teleportErr)
+                        warn(string.format(
+                            "[ServerHop] Attempt %d/%d failed for server %s: %s",
+                            attempt, maxRetries, server.id, errMsg
+                        ))
+
+                        -- 🔴 ERROR 771: Server tidak tersedia, skip ke server lain
+                        if string.find(errMsg, "771") or string.find(errMsg, "Server is no longer available") then
+                            warn("[ServerHop] Server", server.id, "no longer available, skipping.")
+                            IgnoredServers[server.id] = os.time() + 300 -- ignore 5 menit
+                            UpdateIgnoredServers(IgnoredServers)
+                            break -- keluar dari retry loop, lanjut ke server berikutnya
+                        end
+
+                        if string.find(errMsg, "772") or string.find(errMsg, "TooManyRequests") then
+                            task.wait(rateLimitCooldown)
+                        else
+                            task.wait(2)
+                        end
+
+                        if attempt >= maxRetries then
+                            IgnoredServers[server.id] = os.time() + 600 -- ignore 10 menit
+                            UpdateIgnoredServers(IgnoredServers)
+                        end
+                    end
+                end
+                if not teleportSuccess then
+                    warn("[ServerHop] All retries failed for server:", server.id)
+                    task.wait(hopCooldown)
+                end
             end
         end
-        cursor = result.nextPageCursor
-        if not cursor then
-            cursor = ""
-            task.wait(1)
+        if not foundValidServer then
+            cursor = result.nextPageCursor or ""
+            if cursor == "" then
+                task.wait(3)
+            else
+                task.wait(0.5)
+            end
         else
-            task.wait(0.2)
+            cursor = ""
         end
     end
 end
@@ -636,7 +701,7 @@ AutoFarmGroup:AddToggle("EnableAutoFarm", {
 --==================================================
 AutoFarmGroup:AddToggle("ServerHop", {
     Text = "Server Hop",
-    Tooltip = "Hop to 1-2 player servers as Spectator",
+    Tooltip = "Hop to 1-3 player servers as Spectator",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -667,9 +732,7 @@ local function QueueAutoExecute()
         })
         return
     end
-    local queued = string.format([[
-loadstring(game:HttpGet(%q))()
-]], LOADER_URL)
+    local queued = string.format([[loadstring(game:HttpGet(%q))()]], LOADER_URL)
     local success, err = pcall(function()
         queue_on_teleport(queued)
     end)
@@ -720,14 +783,14 @@ WebhookGroup:AddButton("Test Webhook", function()
     local ok, msg = SendDiscordWebhook("🔔 Webhook Test", "Webhook configuration test from **VD Auto Farm** UI!", true)
     if ok then
         Library:Notify({
-            Title = "Webhook Success",
+            Title = "Webhook Success   \n",
             Description = "Test message sent to Discord!",
             Icon = "check",
             Time = 4,
         })
     else
         Library:Notify({
-            Title = "Webhook Failed",
+            Title = "Webhook Failed   \n",
             Description = msg,
             Icon = "x",
             Time = 5,
