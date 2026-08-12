@@ -470,7 +470,7 @@ local function BeatGameSurvivor()
         return
     end
 
-    task.wait(5)
+    task.wait(6)
 
     local currentRoot = GetCharacterRoot()
     if not currentRoot then
