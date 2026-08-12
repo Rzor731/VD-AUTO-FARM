@@ -583,6 +583,8 @@ local function ServerHop()
     local hopCooldown = 5         -- Jeda antar hop (detik)
     local rateLimitCooldown = 5  -- Jeda khusus jika terkena rate limit (error 772)
 
+	Library:Notify({ Title = "🚀 ServerHop   \n", Description = "Scanning for servers...", Time = 2 })
+
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
             task.wait(0.5)
@@ -621,6 +623,13 @@ local function ServerHop()
                 and server.playing <= 3
                 and not IgnoredServers[server.id]
             then
+
+				Library:Notify({ 
+	                Title = "🎯 Target Found   \n", 
+	                Description = string.format("%d players", server.playing), 
+	                Time = 2 
+	            })
+				
                 foundValidServer = true
                 IgnoredServers[server.id] = os.time()
                 UpdateIgnoredServers(IgnoredServers)
@@ -633,6 +642,12 @@ local function ServerHop()
                 while attempt < maxRetries and not teleportSuccess do
                     attempt = attempt + 1
 
+					Library:Notify({ 
+	                    Title = "📡 Teleporting", 
+	                    Description = string.format("Attempt %d/%d", attempt, maxRetries), 
+	                    Time = 1.5 
+	                })
+
                     local teleportOk, teleportErr = pcall(function()
                         TeleportService:TeleportToPlaceInstance(
                             game.PlaceId,
@@ -642,6 +657,7 @@ local function ServerHop()
                     end)
 
                     if teleportOk then
+						Library:Notify({ Title = "✅ Hop Success!   \n", Description = "See you in new server.", Time = 1 })
                         return
                     else
                         local errMsg = tostring(teleportErr)
