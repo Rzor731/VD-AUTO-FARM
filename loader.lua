@@ -636,7 +636,7 @@ local function ServerHop()
 
                     Library:Notify({
                         Title = "📡 Teleporting   \n",
-                        Description = string.format("Attempt %d/%d | %d Players\nServer: %s   ", attempt, maxRetries, server.playing, server.id:sub(1,8)),
+                        Description = string.format("Attempt %d/%d | %d Players   ", attempt, maxRetries, server.playing),
                         Time = 1.5
                     })
 
