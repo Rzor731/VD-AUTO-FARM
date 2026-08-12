@@ -164,6 +164,37 @@ end
 --==================================================
 -- WEBHOOK SYSTEM
 --==================================================
+-- Webhook khusus untuk debug (tidak update snapshot)
+local function SendDebugWebhookMessage(title, description)
+    if not Toggles.EnableWebhook or not Toggles.EnableWebhook.Value then
+        return false
+    end
+    local webhookUrl = Options.WebhookLink and Options.WebhookLink.Value or ""
+    if webhookUrl == "" or not string.find(webhookUrl, "discord.com/api/webhooks") then
+        return false
+    end
+
+    local HttpService = game:GetService("HttpService")
+    local payload = {
+        ["embeds"] = {{
+            ["title"] = title,
+            ["description"] = description,
+            ["color"] = 16711680, -- merah untuk debug
+            ["footer"] = {
+                ["text"] = "ServerHop Debug"
+            },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S.000Z")
+        }}
+    }
+    local response = safeRequest({
+        Url = webhookUrl,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode(payload)
+    })
+    return response and (response.StatusCode == 200 or response.StatusCode == 204)
+end
+
 local function SendDiscordWebhook(customTitle, customDesc, forceSend)
     if not forceSend
     and (
@@ -496,36 +527,57 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local IgnoredServers = {}
--- Ganti bagian ini di awal script (setelah deklarasi IGNORE_FILE, HOUR, dll)
 
 local function GetIgnoredServers()
+    if type(isfile) ~= "function"
+    or type(readfile) ~= "function" then
+        return {}
+    end
+
     if not isfile(IGNORE_FILE) then
         return {}
     end
+
     local list = {}
     local now = os.time()
+
     for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
-        local serverId, expiredAt = line:match("([^|]+)|?(%d*)")
-        expiredAt = tonumber(expiredAt) or 0
-        if serverId and serverId ~= "" and now < expiredAt then
+        local serverId, expiredAt = line:match("^([^|]+)|(%d+)$")
+        expiredAt = tonumber(expiredAt)
+
+        if serverId
+            and serverId ~= ""
+            and expiredAt
+            and now < expiredAt
+        then
             list[serverId] = expiredAt
         end
     end
+
     return list
 end
 
 local function UpdateIgnoredServers(list)
+    if type(writefile) ~= "function" then
+        return false
+    end
     local lines = {}
     for serverId, expiredAt in pairs(list) do
         table.insert(lines, serverId .. "|" .. expiredAt)
     end
     writefile(IGNORE_FILE, table.concat(lines, "\n"))
+    return true
 end
 
 local function IsServerIgnored(serverId)
     local expiredAt = IgnoredServers[serverId]
     if not expiredAt then return false end
-    return os.time() < expiredAt
+    if os.time() >= expiredAt then
+        IgnoredServers[serverId] = nil
+        UpdateIgnoredServers(IgnoredServers)
+        return false
+    end
+    return true
 end
 
 local function AddIgnoredServer(serverId, duration)
@@ -584,7 +636,6 @@ end
 -- SERVER HOP (DENGAN RETRY & ERROR HANDLING)
 --==================================================
 
--- Tambahkan throttle untuk debug webhook
 local lastDebugWebhookTime = 0
 local function SendDebugWebhook(message, extra)
     local now = os.time()
@@ -593,18 +644,17 @@ local function SendDebugWebhook(message, extra)
 
     local desc = "**ServerHop Debug**\n" .. message
     if extra then desc = desc .. "\n" .. extra end
-    SendDiscordWebhook("🐛 ServerHop Debug", desc, true)
+    SendDebugWebhookMessage("🐛 ServerHop Debug", desc)
 end
 
 local function ServerHop()
+	IgnoredServers = GetIgnoredServers()
     local cursor = ""
     local maxRetries = 3              -- percobaan teleport per server
     local hopCooldown = 5             -- jeda antar server
     local rateLimitCooldown = 5       -- jeda rate limit
     local teleportTimeout = 10        -- maksimal waktu tunggu JobId berubah (detik)
     local consecutiveFailures = 0
-
-    Library:Notify({ Title = "🚀 ServerHop", Description = "Scanning for servers...", Time = 2 })
 
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
@@ -613,29 +663,41 @@ local function ServerHop()
         end
 
         local success, result = pcall(function()
-            local url = "https://games.roblox.com/v1/games/"
-                .. game.PlaceId
-                .. "/servers/Public?limit=100"
-                .. "&sortOrder=Asc"
-                .. "&excludeFullGames=true"
-                .. "&cursor=" .. cursor
-            return HttpService:JSONDecode(game:HttpGet(url))
-        end)
-
-        if not success or not result or not result.data then
-            task.wait(3)
-            consecutiveFailures = consecutiveFailures + 1
-            if consecutiveFailures >= 5 then
-                SendDebugWebhook("API request failed repeatedly", "Error: " .. tostring(result))
-                consecutiveFailures = 0
-            end
-            continue
-        else
-            consecutiveFailures = 0
-        end
+		    local url = "https://games.roblox.com/v1/games/"
+		        .. game.PlaceId
+		        .. "/servers/Public?limit=100"
+		        .. "&sortOrder=Asc"
+		        .. "&excludeFullGames=true"
+		        .. "&cursor=" .. cursor
+		    return HttpService:JSONDecode(game:HttpGet(url))
+		end)
+		
+		if not success then
+		    -- pcall gagal, result berisi error message
+		    local errMsg = tostring(result)
+		    task.wait(3)
+		    consecutiveFailures = consecutiveFailures + 1
+		    if consecutiveFailures >= 5 then
+		        SendDebugWebhook("API request failed repeatedly", "Error: " .. errMsg)
+		        consecutiveFailures = 0
+		    end
+		    continue
+		end
+		
+		if not result or not result.data then
+		    -- result mungkin nil atau tidak punya data
+		    task.wait(3)
+		    consecutiveFailures = consecutiveFailures + 1
+		    if consecutiveFailures >= 5 then
+		        SendDebugWebhook("API returned invalid data", "Result: " .. tostring(result))
+		        consecutiveFailures = 0
+		    end
+		    continue
+		else
+		    consecutiveFailures = 0
+		end
 
         local serversList = result.data
-        local anyAttempted = false
         local currentJobId = game.JobId
 
         for _, server in ipairs(serversList) do
@@ -651,13 +713,6 @@ local function ServerHop()
                 and server.playing <= 3
                 and not IsServerIgnored(server.id)
             then
-                anyAttempted = true
-
-                Library:Notify({
-                    Title = "🎯 Target Found",
-                    Description = string.format("%d players", server.playing),
-                    Time = 2
-                })
 
                 -- Ignore sementara agar tidak dicoba ulang dalam waktu dekat
                 AddIgnoredServer(server.id, 120) -- 2 menit
@@ -672,8 +727,8 @@ local function ServerHop()
                     attempt = attempt + 1
 
                     Library:Notify({
-                        Title = "📡 Teleporting",
-                        Description = string.format("Attempt %d/%d to %s", attempt, maxRetries, server.id:sub(1,8)),
+                        Title = "📡 Teleporting   \n",
+                        Description = string.format("Attempt %d/%d | %d Players   ", attempt, maxRetries, server.playing),
                         Time = 1.5
                     })
 
@@ -706,7 +761,7 @@ local function ServerHop()
 
                     if jobIdChanged then
                         teleportSuccess = true
-                        Library:Notify({ Title = "✅ Hop Success!", Description = "Moved to new server.", Time = 1 })
+                        Library:Notify({ Title = "✅ Hop Success!   \n", Description = "Moved to new server.   ", Time = 1 })
                         return  -- berhasil, keluar fungsi
                     else
                         -- Gagal: JobId tidak berubah dalam waktu yang diberikan
@@ -728,9 +783,13 @@ local function ServerHop()
                             or string.find(lastError, "Teleport failed")
                             or string.find(lastError, "cannot teleport")
                             or string.find(lastError, "no longer available")
-                            or string.find(lastError, "JobId did not change")
 
-                        if isServerGone then
+                        local isTimeout = string.find(lastError, "JobId did not change")
+						if isTimeout then
+						    -- Timeout, jangan langsung ignore, tapi retry lagi (dengan jeda lebih lama)
+						    task.wait(5)
+						
+						elseif isServerGone then
                             warn("[ServerHop] Server", server.id, "no longer available, skipping.")
                             AddIgnoredServer(server.id, 300) -- 5 menit
                             break  -- keluar dari retry loop, lanjut server berikutnya
@@ -756,26 +815,15 @@ local function ServerHop()
             end
         end
 
-        -- Manajemen cursor
-        if not anyAttempted then
-            cursor = result.nextPageCursor or ""
-            if cursor == "" then
-                -- Sudah halaman terakhir, reset ke awal
-                cursor = ""
-                task.wait(3)
-            else
-                task.wait(0.5)
-            end
-        else
-            -- Ada server yang dicoba, lanjut ke halaman berikutnya
-            cursor = result.nextPageCursor or ""
-            if cursor == "" then
-                cursor = ""  -- reset ke awal
-                task.wait(1)
-            else
-                task.wait(0.5)
-            end
-        end
+        -- Cursor management
+		cursor = result.nextPageCursor or ""
+		if cursor == "" then
+		    -- Reset ke awal setelah halaman terakhir
+		    cursor = ""
+		    task.wait(3)
+		else
+		    task.wait(0.5)
+		end
     end
 end
 --==================================================
@@ -791,7 +839,7 @@ AutoFarmGroup:AddToggle("EnableAutoFarm", {
 --==================================================
 AutoFarmGroup:AddToggle("ServerHop", {
     Text = "Server Hop",
-    Tooltip = "Hop to 1-3 player servers as Spectator",
+    Tooltip = "Hop to 1-3 player servers when round is active",
     Default = false,
     Callback = function(Value)
         if Value then
