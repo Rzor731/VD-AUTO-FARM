@@ -623,11 +623,6 @@ local function ServerHop()
 					end
 					if jobIdChanged then
 						teleportSuccess = true
-						Library:Notify({
-							Title = "✅ Hop Success!   \n",
-							Description = "Moved to new server.   ",
-							Time = 1
-						})
 						return  -- berhasil, keluar fungsi
 					else
                         -- Gagal: JobId tidak berubah dalam waktu yang diberikan
