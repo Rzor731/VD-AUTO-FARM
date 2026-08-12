@@ -583,8 +583,6 @@ local function ServerHop()
     local hopCooldown = 5
     local rateLimitCooldown = 5
 
-    Library:Notify({ Title = "🚀 ServerHop", Description = "Scanning for servers...", Time = 2 })
-
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
             task.wait(0.5)
@@ -624,12 +622,6 @@ local function ServerHop()
             then
                 anyAttempted = true
 
-                Library:Notify({
-                    Title = "🎯 Target Found",
-                    Description = string.format("%d players", server.playing),
-                    Time = 2
-                })
-
                 -- Tambahkan ke ignore sementara
                 IgnoredServers[server.id] = os.time()
                 UpdateIgnoredServers(IgnoredServers)
@@ -643,8 +635,8 @@ local function ServerHop()
                     attempt = attempt + 1
 
                     Library:Notify({
-                        Title = "📡 Teleporting",
-                        Description = string.format("Attempt %d/%d to server %s", attempt, maxRetries, server.id:sub(1,8)),
+                        Title = "📡 Teleporting   \n",
+                        Description = string.format("Attempt %d/%d | %d Players\nServer: %s   ", attempt, maxRetries, server.playing, server.id:sub(1,8)),
                         Time = 1.5
                     })
 
