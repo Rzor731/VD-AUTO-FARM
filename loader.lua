@@ -579,11 +579,11 @@ end
 
 local function ServerHop()
     local cursor = ""
-    local maxRetries = 3          -- Maksimal percobaan teleport per server
-    local hopCooldown = 5         -- Jeda antar hop (detik)
-    local rateLimitCooldown = 5   -- Jeda khusus jika terkena rate limit (error 772)
+    local maxRetries = 3
+    local hopCooldown = 5
+    local rateLimitCooldown = 5
 
-    Library:Notify({ Title = "🚀 ServerHop   \n", Description = "Scanning for servers...", Time = 2 })
+    Library:Notify({ Title = "🚀 ServerHop", Description = "Scanning for servers...", Time = 2 })
 
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
@@ -607,16 +607,16 @@ local function ServerHop()
         end
 
         local serversList = result.data
-        local anyAttempted = false  -- menandakan ada server yang dicoba (meskipun gagal)
+        local anyAttempted = false
+        local currentJobId = game.JobId  -- simpan ID server saat ini
 
         for _, server in ipairs(serversList) do
             if not CanServerHop() then
                 break
             end
 
-            -- Filter server yang valid
             if server.id
-                and server.id ~= game.JobId
+                and server.id ~= currentJobId
                 and server.playing
                 and server.playing >= 1
                 and server.playing <= 3
@@ -625,12 +625,12 @@ local function ServerHop()
                 anyAttempted = true
 
                 Library:Notify({
-                    Title = "🎯 Target Found   \n",
+                    Title = "🎯 Target Found",
                     Description = string.format("%d players", server.playing),
                     Time = 2
                 })
 
-                -- Tambahkan ke ignore sementara agar tidak dicoba ulang jika gagal
+                -- Tambahkan ke ignore sementara
                 IgnoredServers[server.id] = os.time()
                 UpdateIgnoredServers(IgnoredServers)
 
@@ -643,11 +643,12 @@ local function ServerHop()
                     attempt = attempt + 1
 
                     Library:Notify({
-                        Title = "📡 Teleporting   \n",
-                        Description = string.format("Attempt %d/%d", attempt, maxRetries),
+                        Title = "📡 Teleporting",
+                        Description = string.format("Attempt %d/%d to server %s", attempt, maxRetries, server.id:sub(1,8)),
                         Time = 1.5
                     })
 
+                    -- Panggil teleport
                     local teleportOk, teleportErr = pcall(function()
                         TeleportService:TeleportToPlaceInstance(
                             game.PlaceId,
@@ -656,66 +657,72 @@ local function ServerHop()
                         )
                     end)
 
-                    if teleportOk then
-                        Library:Notify({ Title = "✅ Hop Success!   \n", Description = "See you in new server.", Time = 1 })
-                        return  -- berhasil, keluar dari fungsi
-                    else
+                    -- Tunggu sebentar agar proses teleport terjadi
+                    task.wait(3)
+
+                    -- Cek apakah kita sudah pindah server
+                    local newJobId = game.JobId
+                    if newJobId ~= currentJobId then
+                        -- Berhasil pindah
+                        Library:Notify({ Title = "✅ Hop Success!", Description = "Moved to new server.", Time = 1 })
+                        return
+                    end
+
+                    -- Jika teleportOk false atau ada error, atau jobId masih sama => gagal
+                    if not teleportOk then
                         local errMsg = tostring(teleportErr)
-                        warn(string.format("[ServerHop] Attempt %d/%d failed for server %s: %s",
-                            attempt, maxRetries, server.id, errMsg))
+                        warn(string.format("[ServerHop] Attempt %d/%d error: %s", attempt, maxRetries, errMsg))
+                    else
+                        warn(string.format("[ServerHop] Attempt %d/%d: Teleport call succeeded but jobId unchanged (server %s not available?)", attempt, maxRetries, server.id))
+                    end
 
-                        -- Deteksi error yang menandakan server sudah tidak tersedia
-                        local isServerGone = string.find(errMsg, "771")
-                            or string.find(errMsg, "Server is no longer available")
-                            or string.find(errMsg, "GameEnded")
-                            or string.find(errMsg, "Unknown exception")
-                            or string.find(errMsg, "Teleport failed")
-                            or string.find(errMsg, "cannot teleport")
-                            or string.find(errMsg, "no longer available")
+                    -- Deteksi error dari pesan (jika ada)
+                    local errMsg = teleportErr and tostring(teleportErr) or ""
+                    local isServerGone = string.find(errMsg, "771")
+                        or string.find(errMsg, "Server is no longer available")
+                        or string.find(errMsg, "GameEnded")
+                        or string.find(errMsg, "Unknown exception")
+                        or string.find(errMsg, "Teleport failed")
+                        or string.find(errMsg, "cannot teleport")
+                        or string.find(errMsg, "no longer available")
 
-                        if isServerGone then
-                            warn("[ServerHop] Server", server.id, "no longer available, skipping.")
-                            IgnoredServers[server.id] = os.time() + 300 -- ignore 5 menit
-                            UpdateIgnoredServers(IgnoredServers)
-                            break  -- keluar dari retry loop, lanjut ke server berikutnya
-                        end
+                    if isServerGone then
+                        warn("[ServerHop] Server", server.id, "no longer available, skipping.")
+                        IgnoredServers[server.id] = os.time() + 300
+                        UpdateIgnoredServers(IgnoredServers)
+                        break
+                    end
 
-                        -- Tangani rate limit
-                        if string.find(errMsg, "772") or string.find(errMsg, "TooManyRequests") then
-                            task.wait(rateLimitCooldown)
-                        else
-                            task.wait(2)
-                        end
+                    -- Jika rate limit, tunggu lebih lama
+                    if string.find(errMsg, "772") or string.find(errMsg, "TooManyRequests") then
+                        task.wait(rateLimitCooldown)
+                    else
+                        task.wait(2)
+                    end
 
-                        -- Jika sudah mencapai max retries, ignore lebih lama
-                        if attempt >= maxRetries then
-                            IgnoredServers[server.id] = os.time() + 600 -- ignore 10 menit
-                            UpdateIgnoredServers(IgnoredServers)
-                        end
+                    if attempt >= maxRetries then
+                        IgnoredServers[server.id] = os.time() + 600
+                        UpdateIgnoredServers(IgnoredServers)
                     end
                 end
 
-                -- Jika teleport gagal (setelah retry habis atau server gone), lanjut ke server berikutnya
+                -- Jika semua percobaan gagal, lanjut ke server berikutnya
                 if not teleportSuccess then
                     warn("[ServerHop] All retries failed for server:", server.id)
                     task.wait(hopCooldown)
-                    -- Kita tetap lanjut ke server berikutnya, tidak perlu reset cursor
                 end
             end
         end
 
-        -- Setelah memproses semua server dalam daftar
+        -- Pindah ke halaman berikutnya
         if not anyAttempted then
-            -- Tidak ada server yang memenuhi filter, pindah ke halaman berikutnya
             cursor = result.nextPageCursor or ""
             if cursor == "" then
-                task.wait(3)  -- sudah halaman terakhir
+                task.wait(3)
             else
                 task.wait(0.5)
             end
         else
-            -- Ada server yang dicoba (baik berhasil maupun gagal), kita lanjut ke halaman berikutnya
-            -- agar tidak mengulang server yang sama (yang sudah di-ignore)
             cursor = result.nextPageCursor or ""
             if cursor == "" then
                 task.wait(1)
