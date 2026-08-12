@@ -496,6 +496,8 @@ local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local IgnoredServers = {}
+-- Ganti bagian ini di awal script (setelah deklarasi IGNORE_FILE, HOUR, dll)
+
 local function GetIgnoredServers()
     if not isfile(IGNORE_FILE) then
         return {}
@@ -503,28 +505,33 @@ local function GetIgnoredServers()
     local list = {}
     local now = os.time()
     for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
-        local serverId, timestamp =
-            line:match("([^|]+)|?(%d*)")
-        timestamp = tonumber(timestamp) or 0
-        if serverId
-            and serverId ~= ""
-            and now - timestamp < HOUR then
-            list[serverId] = timestamp
+        local serverId, expiredAt = line:match("([^|]+)|?(%d*)")
+        expiredAt = tonumber(expiredAt) or 0
+        if serverId and serverId ~= "" and now < expiredAt then
+            list[serverId] = expiredAt
         end
     end
     return list
 end
+
 local function UpdateIgnoredServers(list)
     local lines = {}
-    for serverId, timestamp in pairs(list) do
-        table.insert(lines, serverId .. "|" .. timestamp)
+    for serverId, expiredAt in pairs(list) do
+        table.insert(lines, serverId .. "|" .. expiredAt)
     end
-    writefile(
-        IGNORE_FILE,
-        table.concat(lines, "\n")
-    )
+    writefile(IGNORE_FILE, table.concat(lines, "\n"))
 end
-IgnoredServers = GetIgnoredServers()
+
+local function IsServerIgnored(serverId)
+    local expiredAt = IgnoredServers[serverId]
+    if not expiredAt then return false end
+    return os.time() < expiredAt
+end
+
+local function AddIgnoredServer(serverId, duration)
+    IgnoredServers[serverId] = os.time() + duration
+    UpdateIgnoredServers(IgnoredServers)
+end
 --==================================================
 -- SERVER HOP STATE
 --==================================================
@@ -577,11 +584,27 @@ end
 -- SERVER HOP (DENGAN RETRY & ERROR HANDLING)
 --==================================================
 
+-- Tambahkan throttle untuk debug webhook
+local lastDebugWebhookTime = 0
+local function SendDebugWebhook(message, extra)
+    local now = os.time()
+    if now - lastDebugWebhookTime < 30 then return end
+    lastDebugWebhookTime = now
+
+    local desc = "**ServerHop Debug**\n" .. message
+    if extra then desc = desc .. "\n" .. extra end
+    SendDiscordWebhook("🐛 ServerHop Debug", desc, true)
+end
+
 local function ServerHop()
     local cursor = ""
-    local maxRetries = 3
-    local hopCooldown = 5
-    local rateLimitCooldown = 5
+    local maxRetries = 3              -- percobaan teleport per server
+    local hopCooldown = 5             -- jeda antar server
+    local rateLimitCooldown = 5       -- jeda rate limit
+    local teleportTimeout = 10        -- maksimal waktu tunggu JobId berubah (detik)
+    local consecutiveFailures = 0
+
+    Library:Notify({ Title = "🚀 ServerHop", Description = "Scanning for servers...", Time = 2 })
 
     while Toggles.ServerHop.Value and not Library.Unloaded do
         if not CanServerHop() then
@@ -601,42 +624,56 @@ local function ServerHop()
 
         if not success or not result or not result.data then
             task.wait(3)
+            consecutiveFailures = consecutiveFailures + 1
+            if consecutiveFailures >= 5 then
+                SendDebugWebhook("API request failed repeatedly", "Error: " .. tostring(result))
+                consecutiveFailures = 0
+            end
             continue
+        else
+            consecutiveFailures = 0
         end
 
         local serversList = result.data
         local anyAttempted = false
-        local currentJobId = game.JobId  -- simpan ID server saat ini
+        local currentJobId = game.JobId
 
         for _, server in ipairs(serversList) do
             if not CanServerHop() then
                 break
             end
 
+            -- Filter server
             if server.id
                 and server.id ~= currentJobId
                 and server.playing
                 and server.playing >= 1
                 and server.playing <= 3
-                and not IgnoredServers[server.id]
+                and not IsServerIgnored(server.id)
             then
                 anyAttempted = true
 
-                -- Tambahkan ke ignore sementara
-                IgnoredServers[server.id] = os.time()
-                UpdateIgnoredServers(IgnoredServers)
+                Library:Notify({
+                    Title = "🎯 Target Found",
+                    Description = string.format("%d players", server.playing),
+                    Time = 2
+                })
 
-                task.wait(3)
+                -- Ignore sementara agar tidak dicoba ulang dalam waktu dekat
+                AddIgnoredServer(server.id, 120) -- 2 menit
 
-                local teleportSuccess = false
+                task.wait(3) -- jeda sebelum teleport
+
                 local attempt = 0
+                local teleportSuccess = false
+                local lastError = ""
 
                 while attempt < maxRetries and not teleportSuccess do
                     attempt = attempt + 1
 
                     Library:Notify({
-                        Title = "📡 Teleporting   \n",
-                        Description = string.format("Attempt %d/%d | %d Players   ", attempt, maxRetries, server.playing),
+                        Title = "📡 Teleporting",
+                        Description = string.format("Attempt %d/%d to %s", attempt, maxRetries, server.id:sub(1,8)),
                         Time = 1.5
                     })
 
@@ -649,56 +686,69 @@ local function ServerHop()
                         )
                     end)
 
-                    -- Tunggu sebentar agar proses teleport terjadi
-                    task.wait(3)
-
-                    -- Cek apakah kita sudah pindah server
-                    local newJobId = game.JobId
-                    if newJobId ~= currentJobId then
-                        -- Berhasil pindah
-                        Library:Notify({ Title = "✅ Hop Success!", Description = "Moved to new server.", Time = 1 })
-                        return
-                    end
-
-                    -- Jika teleportOk false atau ada error, atau jobId masih sama => gagal
                     if not teleportOk then
-                        local errMsg = tostring(teleportErr)
-                        warn(string.format("[ServerHop] Attempt %d/%d error: %s", attempt, maxRetries, errMsg))
+                        lastError = tostring(teleportErr)
                     else
-                        warn(string.format("[ServerHop] Attempt %d/%d: Teleport call succeeded but jobId unchanged (server %s not available?)", attempt, maxRetries, server.id))
+                        lastError = "Teleport call succeeded, waiting for JobId change..."
                     end
 
-                    -- Deteksi error dari pesan (jika ada)
-                    local errMsg = teleportErr and tostring(teleportErr) or ""
-                    local isServerGone = string.find(errMsg, "771")
-                        or string.find(errMsg, "Server is no longer available")
-                        or string.find(errMsg, "GameEnded")
-                        or string.find(errMsg, "Unknown exception")
-                        or string.find(errMsg, "Teleport failed")
-                        or string.find(errMsg, "cannot teleport")
-                        or string.find(errMsg, "no longer available")
-
-                    if isServerGone then
-                        warn("[ServerHop] Server", server.id, "no longer available, skipping.")
-                        IgnoredServers[server.id] = os.time() + 300
-                        UpdateIgnoredServers(IgnoredServers)
-                        break
+                    -- Polling JobId hingga timeout
+                    local startTime = os.time()
+                    local jobIdChanged = false
+                    while os.time() - startTime < teleportTimeout do
+                        task.wait(1)
+                        local newJobId = game.JobId
+                        if newJobId ~= currentJobId then
+                            jobIdChanged = true
+                            break
+                        end
                     end
 
-                    -- Jika rate limit, tunggu lebih lama
-                    if string.find(errMsg, "772") or string.find(errMsg, "TooManyRequests") then
-                        task.wait(rateLimitCooldown)
+                    if jobIdChanged then
+                        teleportSuccess = true
+                        Library:Notify({ Title = "✅ Hop Success!", Description = "Moved to new server.", Time = 1 })
+                        return  -- berhasil, keluar fungsi
                     else
-                        task.wait(2)
-                    end
+                        -- Gagal: JobId tidak berubah dalam waktu yang diberikan
+                        if teleportOk then
+                            lastError = "JobId did not change within " .. teleportTimeout .. " seconds"
+                        end
 
-                    if attempt >= maxRetries then
-                        IgnoredServers[server.id] = os.time() + 600
-                        UpdateIgnoredServers(IgnoredServers)
+                        warn(string.format("[ServerHop] Attempt %d/%d failed: %s", attempt, maxRetries, lastError))
+                        SendDebugWebhook(
+                            string.format("Failed to hop to server `%s`", server.id:sub(1,8)),
+                            string.format("Attempt %d/%d\nError: %s", attempt, maxRetries, lastError)
+                        )
+
+                        -- Deteksi error yang menandakan server gone
+                        local isServerGone = string.find(lastError, "771")
+                            or string.find(lastError, "Server is no longer available")
+                            or string.find(lastError, "GameEnded")
+                            or string.find(lastError, "Unknown exception")
+                            or string.find(lastError, "Teleport failed")
+                            or string.find(lastError, "cannot teleport")
+                            or string.find(lastError, "no longer available")
+                            or string.find(lastError, "JobId did not change")
+
+                        if isServerGone then
+                            warn("[ServerHop] Server", server.id, "no longer available, skipping.")
+                            AddIgnoredServer(server.id, 300) -- 5 menit
+                            break  -- keluar dari retry loop, lanjut server berikutnya
+                        end
+
+                        -- Rate limit
+                        if string.find(lastError, "772") or string.find(lastError, "TooManyRequests") then
+                            task.wait(rateLimitCooldown)
+                        else
+                            task.wait(2)
+                        end
+
+                        if attempt >= maxRetries then
+                            AddIgnoredServer(server.id, 600) -- 10 menit
+                        end
                     end
                 end
 
-                -- Jika semua percobaan gagal, lanjut ke server berikutnya
                 if not teleportSuccess then
                     warn("[ServerHop] All retries failed for server:", server.id)
                     task.wait(hopCooldown)
@@ -706,17 +756,21 @@ local function ServerHop()
             end
         end
 
-        -- Pindah ke halaman berikutnya
+        -- Manajemen cursor
         if not anyAttempted then
             cursor = result.nextPageCursor or ""
             if cursor == "" then
+                -- Sudah halaman terakhir, reset ke awal
+                cursor = ""
                 task.wait(3)
             else
                 task.wait(0.5)
             end
         else
+            -- Ada server yang dicoba, lanjut ke halaman berikutnya
             cursor = result.nextPageCursor or ""
             if cursor == "" then
+                cursor = ""  -- reset ke awal
                 task.wait(1)
             else
                 task.wait(0.5)
