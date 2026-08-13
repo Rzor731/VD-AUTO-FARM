@@ -616,6 +616,65 @@ local function IsServerIgnored(serverId)
 end
 
 --==================================================
+-- ROUND / SERVER HOP STATE
+--==================================================
+
+local IsRound = false
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local StatusUpdateEvent = Remotes:WaitForChild("StatusUpdateEvent")
+local TimeUpdateEvent = Remotes:WaitForChild("TimeUpdateEvent")
+
+--==================================================
+-- STATUS DETECTOR
+--==================================================
+
+StatusUpdateEvent.OnClientEvent:Connect(function(Status)
+	if Status == "WaitingForPlayers" then
+		IsRound = false
+		BeatState.BeatSurvivorDone = false
+
+	elseif Status == "IntermissionStarting" then
+		IsRound = false
+		BeatState.BeatSurvivorDone = false
+
+	elseif Status == "Intermission" then
+		IsRound = false
+		BeatState.BeatSurvivorDone = false
+	end
+end)
+
+--==================================================
+-- ROUND DETECTOR
+--==================================================
+
+TimeUpdateEvent.OnClientEvent:Connect(function(Status)
+	if Status == "Round" then
+		IsRound = true
+	end
+end)
+
+--==================================================
+-- SERVER HOP PERMISSION
+--==================================================
+
+local function CanServerHop()
+	if not IsRound then
+		return false
+	end
+
+	local role = GetRole()
+
+	if role ~= "Spectator" and role ~= "Killer" then
+		return false
+	end
+
+	return true
+end
+
+--==================================================
 -- TELEPORT STATE MANAGEMENT
 --==================================================
 
