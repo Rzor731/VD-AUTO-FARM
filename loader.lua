@@ -41,7 +41,20 @@ local WebhookGroup = Tabs.AutoFarm:AddRightGroupbox("Webhook", "webhook")
 local BeatState = {
 	LastFinishPos = nil,
 	BeatSurvivorDone = false,
+	LastRole = nil,
 }
+local LastNotifTime = 0
+local function NotifyAF(title, desc, icon)
+    local now = os.time()
+    if now - LastNotifTime < 2.5 then return end
+    LastNotifTime = now
+    Library:Notify({
+        Title = title .. "   \n",
+        Description = desc,
+        Icon = icon or "info",
+        Time = 3,
+    })
+end
 --==================================================
 -- HELPER FUNCTIONS
 --==================================================
@@ -327,9 +340,18 @@ local function BeatGameSurvivor()
 		BeatState.LastFinishPos = nil
 		return
 	end
-	if GetRole() ~= "Survivor" then
-		return
-	end
+	local currentRole = GetRole()
+	-- [NOTIF 2] Role berubah menjadi Survivor
+    if BeatState.LastRole ~= currentRole then
+        if currentRole == "Survivor" then
+            NotifyAF("🟢 Survivor!", "Ready to farm.   ", "users")
+        end
+        BeatState.LastRole = currentRole
+    end
+
+    if currentRole ~= "Survivor" then
+        return
+    end
 	local root = GetCharacterRoot()
 	if not root then
 		return
@@ -410,14 +432,21 @@ local function BeatGameSurvivor()
 		return
 	end
 	task.wait(6)
-	local currentRoot = GetCharacterRoot()
-	if not currentRoot then
-		return
-	end
+	if not Toggles.EnableAutoFarm.Value then return end
+    if GetRole() ~= "Survivor" then return end
+    if not IsRound then return end
+
+    local currentRoot = GetCharacterRoot()
+    if not currentRoot then return end
+
+    -- [NOTIF 4] Sebelum teleport
+    NotifyAF("🚀 Teleporting", "Moving to finish...   ", "send")
+	
 	currentRoot.CFrame = CFrame.new(
         exitPos + Vector3.new(0, 0, 0))
 	BeatState.BeatSurvivorDone = true
 	BeatState.LastFinishPos = exitPos
+	NotifyAF("✅ Teleport Success", "Round completed!   ", "check")
 	task.wait(5)
 	SendDiscordWebhook()
 end
