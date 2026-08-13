@@ -471,272 +471,653 @@ local function BeatGameSurvivor()
 end
 --==================================================
 -- SERVER HOP
+-- EVENT-DRIVEN + JOBID FALLBACK + PERSISTENT IGNORE
 --==================================================
+
 local IGNORE_FILE = "ServerHop.txt"
-local HOUR = 3600
-local HttpService = game:GetService("HttpService")
+
 local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+--==================================================
+-- SERVER HOP STATE
+--==================================================
+
 local IgnoredServers = {}
+
+local TargetServerId = nil
+local OriginalJobId = nil
+
+local TeleportInProgress = false
+local TeleportFailed = false
+
+local LastTeleportError = ""
+local LastTeleportResult = nil
+
+local IsHopping = false
+
+-- Forward declaration so the native teleport event can safely
+-- recover the ServerHop loop if needed.
+local ServerHop
+
+--==================================================
+-- SERVER HOP CONFIG
+--==================================================
+
+local CANDIDATE_IGNORE_TIME = 180
+local FAILED_SERVER_IGNORE_TIME = 600
+
+local API_RETRY_DELAY = 3
+local PAGE_DELAY = 0.5
+local NO_SERVER_DELAY = 3
+
+-- Event-driven is primary.
+-- JobId is only used as a fallback safety check.
+local TELEPORT_EVENT_WINDOW = 7
+
+local TELEPORT_FAILURE_DELAY = 2.5
+
+--==================================================
+-- BLACKLIST FILE MANAGEMENT
+--==================================================
+
 local function GetIgnoredServers()
-	if type(isfile) ~= "function" or type(readfile) ~= "function" then
+	if type(isfile) ~= "function"
+		or type(readfile) ~= "function"
+		or not isfile(IGNORE_FILE)
+	then
 		return {}
 	end
-	if not isfile(IGNORE_FILE) then
+
+	local success, content = pcall(readfile, IGNORE_FILE)
+
+	if not success or type(content) ~= "string" then
 		return {}
 	end
-	local list = {}
+
 	local now = os.time()
-	for _, line in ipairs(readfile(IGNORE_FILE):split("\n")) do
-		local serverId, expiredAt = line:match("^([^|]+)|(%d+)$")
+	local list = {}
+
+	for _, line in ipairs(content:split("\n")) do
+		local serverId, expiredAt =
+			line:match("^([^|]+)|(%d+)$")
+
 		expiredAt = tonumber(expiredAt)
-		if serverId and serverId ~= "" and expiredAt and now < expiredAt then
+
+		if serverId
+			and serverId ~= ""
+			and expiredAt
+			and now < expiredAt
+		then
 			list[serverId] = expiredAt
 		end
 	end
+
 	return list
 end
+
 local function UpdateIgnoredServers(list)
 	if type(writefile) ~= "function" then
 		return false
 	end
+
+	local now = os.time()
 	local lines = {}
+
 	for serverId, expiredAt in pairs(list) do
-		table.insert(lines, serverId .. "|" .. expiredAt)
+		if serverId
+			and expiredAt
+			and now < expiredAt
+		then
+			table.insert(
+				lines,
+				serverId .. "|" .. expiredAt
+			)
+		end
 	end
-	writefile(IGNORE_FILE, table.concat(lines, "\n"))
-	return true
+
+	local success = pcall(function()
+		writefile(
+			IGNORE_FILE,
+			table.concat(lines, "\n")
+		)
+	end)
+
+	return success
 end
+
+local function AddIgnoredServer(serverId, duration)
+	if not serverId then
+		return
+	end
+
+	IgnoredServers[serverId] =
+		os.time() + duration
+
+	UpdateIgnoredServers(IgnoredServers)
+end
+
 local function IsServerIgnored(serverId)
 	local expiredAt = IgnoredServers[serverId]
+
 	if not expiredAt then
 		return false
 	end
+
 	if os.time() >= expiredAt then
 		IgnoredServers[serverId] = nil
 		UpdateIgnoredServers(IgnoredServers)
 		return false
 	end
+
 	return true
 end
-local function AddIgnoredServer(serverId, duration)
-	IgnoredServers[serverId] = os.time() + duration
-	UpdateIgnoredServers(IgnoredServers)
+
+--==================================================
+-- TELEPORT STATE MANAGEMENT
+--==================================================
+
+local function ResetTeleportState()
+	TargetServerId = nil
+	OriginalJobId = nil
+
+	TeleportInProgress = false
+	TeleportFailed = false
+
+	LastTeleportError = ""
+	LastTeleportResult = nil
 end
---==================================================
--- SERVER HOP STATE
---==================================================
-local IsRound = false
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local StatusUpdateEvent = Remotes:WaitForChild("StatusUpdateEvent")
-local TimeUpdateEvent = Remotes:WaitForChild("TimeUpdateEvent")
---==================================================
--- STATUS DETECTOR
---==================================================
-StatusUpdateEvent.OnClientEvent:Connect(function(Status)
-	if Status == "WaitingForPlayers" then
-		IsRound = false
-		BeatState.BeatSurvivorDone = false
-	elseif Status == "IntermissionStarting" then
-		IsRound = false
-		BeatState.BeatSurvivorDone = false
-	elseif Status == "Intermission" then
-		IsRound = false
-		BeatState.BeatSurvivorDone = false
-	end
-end)
---==================================================
--- ROUND DETECTOR
---==================================================
-TimeUpdateEvent.OnClientEvent:Connect(function(Status)
-	if Status == "Round" then
-		IsRound = true
-	end
-end)
---==================================================
--- SERVER HOP PERMISSION
---==================================================
-local function CanServerHop()
-	if not IsRound then
+
+local function BeginTeleport(serverId)
+	TargetServerId = serverId
+	OriginalJobId = game.JobId
+
+	TeleportInProgress = true
+	TeleportFailed = false
+
+	LastTeleportError = ""
+	LastTeleportResult = nil
+end
+
+local function RegisterTeleportFailure(teleportResult, errorMessage)
+	if not TeleportInProgress then
 		return false
 	end
-	local role = GetRole()
-	if role ~= "Spectator" and role ~= "Killer" then
-		return false
-	end
+
+	TeleportFailed = true
+	LastTeleportResult = teleportResult
+	LastTeleportError = tostring(errorMessage)
+
 	return true
 end
+
 --==================================================
--- SERVER HOP (DENGAN RETRY & ERROR HANDLING)
+-- NATIVE TELEPORT FAILURE EVENT
 --==================================================
-local lastDebugWebhookTime = 0
-local function SendDebugWebhook(message, extra)
-	local now = os.time()
-	if now - lastDebugWebhookTime < 30 then
+
+TeleportService.TeleportInitFailed:Connect(
+	function(player, teleportResult, errorMessage)
+		if player ~= LocalPlayer then
+			return
+		end
+
+		if not TeleportInProgress then
+			return
+		end
+
+		local targetId = TargetServerId
+
+		if not RegisterTeleportFailure(
+			teleportResult,
+			errorMessage
+		) then
+			return
+		end
+
+		local resultText = tostring(teleportResult)
+		local errorText = tostring(errorMessage)
+
+		warn(
+			string.format(
+				"[ServerHop] TeleportInitFailed | Server: %s | Code: %s | Error: %s",
+				tostring(targetId),
+				resultText,
+				errorText
+			)
+		)
+
+		if targetId then
+			-- Real teleport failure:
+			-- keep the server out for longer.
+			AddIgnoredServer(
+				targetId,
+				FAILED_SERVER_IGNORE_TIME
+			)
+
+			pcall(function()
+				Library:Notify({
+					Title = "❌ Teleport Failed",
+					Description = string.format(
+						"Server %s gagal. Blacklist 10 menit.",
+						targetId:sub(1, 8)
+					),
+					Time = 3
+				})
+			end)
+
+			pcall(function()
+				SendDebugWebhookMessage(
+					"🐛 Server Hop Error",
+					string.format(
+						"Server: `%s`\nCode: `%s`\nError: `%s`",
+						targetId,
+						resultText,
+						errorText
+					)
+				)
+			end)
+		end
+	end
+)
+
+--==================================================
+-- TELEPORT REQUEST
+--==================================================
+
+local function TryTeleport(serverId)
+	BeginTeleport(serverId)
+
+	local success, err = pcall(function()
+		TeleportService:TeleportToPlaceInstance(
+			game.PlaceId,
+			serverId,
+			LocalPlayer
+		)
+	end)
+
+	-- Immediate/synchronous error while invoking teleport.
+	if not success then
+		TeleportInProgress = false
+
+		LastTeleportError = tostring(err)
+
+		AddIgnoredServer(
+			serverId,
+			FAILED_SERVER_IGNORE_TIME
+		)
+
+		warn(
+			string.format(
+				"[ServerHop] Teleport call failed | Server: %s | Error: %s",
+				serverId,
+				tostring(err)
+			)
+		)
+
+		pcall(function()
+			SendDebugWebhookMessage(
+				"🐛 Teleport Call Failed",
+				string.format(
+					"Server: `%s`\nError: `%s`",
+					serverId,
+					tostring(err)
+				)
+			)
+		end)
+
+		ResetTeleportState()
+
+		return false
+	end
+
+	return true
+end
+
+--==================================================
+-- WAIT FOR TELEPORT RESULT
+--==================================================
+
+local function WaitForTeleportResult()
+	local startTime = os.clock()
+
+	while TeleportInProgress
+		and not TeleportFailed
+		and os.clock() - startTime < TELEPORT_EVENT_WINDOW
+	do
+		-- Native TeleportInitFailed is the primary signal.
+		-- JobId change is only a fallback success signal.
+		if game.JobId ~= OriginalJobId then
+			return "Success"
+		end
+
+		task.wait(0.1)
+	end
+
+	if TeleportFailed then
+		return "Failed"
+	end
+
+	if game.JobId ~= OriginalJobId then
+		return "Success"
+	end
+
+	-- No failure event and JobId did not change.
+	-- Treat this candidate as a silent timeout so the loop
+	-- does not remain stuck forever.
+	return "Timeout"
+end
+
+--==================================================
+-- MAIN SERVER HOP
+--==================================================
+
+ServerHop = function()
+	if IsHopping then
 		return
 	end
-	lastDebugWebhookTime = now
-	local desc = "**ServerHop Debug**\n" .. message
-	if extra then
-		desc = desc .. "\n" .. extra
-	end
-	SendDebugWebhookMessage("🐛 ServerHop Debug", desc)
-end
-local function ServerHop()
+
+	IsHopping = true
+
 	IgnoredServers = GetIgnoredServers()
+	ResetTeleportState()
+
 	local cursor = ""
-	local maxRetries = 3              -- percobaan teleport per server
-	local hopCooldown = 5             -- jeda antar server
-	local rateLimitCooldown = 5       -- jeda rate limit
-	local teleportTimeout = 10        -- maksimal waktu tunggu JobId berubah (detik)
-	local consecutiveFailures = 0
-	while Toggles.ServerHop.Value and not Library.Unloaded do
+	local consecutiveApiFailures = 0
+
+	while Toggles.ServerHop
+		and Toggles.ServerHop.Value
+		and not Library.Unloaded
+	do
+		--==================================================
+		-- PERMISSION CHECK
+		--==================================================
+
 		if not CanServerHop() then
+			ResetTeleportState()
 			task.wait(0.5)
 			continue
 		end
+
+		--==================================================
+		-- REQUEST SERVER LIST
+		--==================================================
+
+		local url =
+			"https://games.roblox.com/v1/games/"
+			.. game.PlaceId
+			.. "/servers/Public"
+			.. "?limit=100"
+			.. "&sortOrder=Asc"
+			.. "&excludeFullGames=true"
+			.. "&cursor="
+			.. HttpService:UrlEncode(cursor)
+
 		local success, result = pcall(function()
-			local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100" .. "&sortOrder=Asc" .. "&excludeFullGames=true" .. "&cursor=" .. cursor
-			return HttpService:JSONDecode(game:HttpGet(url))
+			return HttpService:JSONDecode(
+				game:HttpGet(url)
+			)
 		end)
+
+		--==================================================
+		-- API FAILURE
+		--==================================================
+
 		if not success then
-		    -- pcall gagal, result berisi error message
-			local errMsg = tostring(result)
-			task.wait(3)
-			consecutiveFailures = consecutiveFailures + 1
-			if consecutiveFailures >= 5 then
-				SendDebugWebhook("API request failed repeatedly", "Error: " .. errMsg)
-				consecutiveFailures = 0
+			consecutiveApiFailures += 1
+
+			warn(
+				"[ServerHop] API request failed:",
+				tostring(result)
+			)
+
+			if consecutiveApiFailures >= 5 then
+				pcall(function()
+					SendDebugWebhook(
+						"Server API failed repeatedly",
+						string.format(
+							"Failures: %d\nError: %s",
+							consecutiveApiFailures,
+							tostring(result)
+						)
+					)
+				end)
+
+				consecutiveApiFailures = 0
 			end
+
+			task.wait(API_RETRY_DELAY)
 			continue
 		end
-		if not result or not result.data then
-		    -- result mungkin nil atau tidak punya data
-			task.wait(3)
-			consecutiveFailures = consecutiveFailures + 1
-			if consecutiveFailures >= 5 then
-				SendDebugWebhook("API returned invalid data", "Result: " .. tostring(result))
-				consecutiveFailures = 0
+
+		--==================================================
+		-- INVALID API RESPONSE
+		--==================================================
+
+		if not result
+			or type(result.data) ~= "table"
+		then
+			consecutiveApiFailures += 1
+
+			warn(
+				"[ServerHop] API returned invalid data."
+			)
+
+			if consecutiveApiFailures >= 5 then
+				pcall(function()
+					SendDebugWebhook(
+						"Server API returned invalid data",
+						tostring(result)
+					)
+				end)
+
+				consecutiveApiFailures = 0
 			end
+
+			task.wait(API_RETRY_DELAY)
 			continue
-		else
-			consecutiveFailures = 0
 		end
-		local serversList = result.data
+
+		consecutiveApiFailures = 0
+
 		local currentJobId = game.JobId
-		for _, server in ipairs(serversList) do
+		local foundServer = false
+
+		--==================================================
+		-- SCAN CURRENT PAGE
+		--==================================================
+
+		for _, server in ipairs(result.data) do
+			if not Toggles.ServerHop.Value
+				or Library.Unloaded
+			then
+				break
+			end
+
 			if not CanServerHop() then
 				break
 			end
 
-            -- Filter server
-			if server.id and server.id ~= currentJobId and server.playing and server.playing >= 1 and server.playing <= 3 and not IsServerIgnored(server.id) then
+			-- Server target:
+			-- 1-3 players, not current server, not ignored.
+			local validServer =
+				server
+				and server.id
+				and server.id ~= currentJobId
+				and server.playing
+				and server.playing >= 1
+				and server.playing <= 3
+				and not IsServerIgnored(server.id)
 
-                -- Ignore sementara agar tidak dicoba ulang dalam waktu dekat
-				AddIgnoredServer(server.id, 120) -- 2 menit
-				task.wait(2) -- jeda sebelum teleport
-				local attempt = 0
-				local teleportSuccess = false
-				local lastError = ""
-				while attempt < maxRetries and not teleportSuccess do
-					attempt = attempt + 1
-					Library:Notify({
-						Title = "📡 Teleporting   \n",
-						Description = string.format("Attempt %d/%d | %d Players   ", attempt, maxRetries, server.playing),
-						Time = 1.5
-					})
+			if not validServer then
+				continue
+			end
 
-                    -- Panggil teleport
-					local teleportOk, teleportErr = pcall(function()
-						TeleportService:TeleportToPlaceInstance(
-                            game.PlaceId, server.id, Players.LocalPlayer)
+			foundServer = true
+
+			local serverId = server.id
+			local playerCount = server.playing
+
+			-- Temporarily reserve this candidate so it will
+			-- not immediately get selected again.
+			AddIgnoredServer(
+				serverId,
+				CANDIDATE_IGNORE_TIME
+			)
+
+			Library:Notify({
+				Title = "📡 Teleporting",
+				Description = string.format(
+					"%d player | Server %s",
+					playerCount,
+					serverId:sub(1, 8)
+				),
+				Time = 2
+			})
+
+			--==================================================
+			-- START TELEPORT
+			--==================================================
+
+			local teleportStarted =
+				TryTeleport(serverId)
+
+			if not teleportStarted then
+				task.wait(
+					TELEPORT_FAILURE_DELAY
+				)
+
+				continue
+			end
+
+			--==================================================
+			-- WAIT FOR EVENT / JOBID FALLBACK
+			--==================================================
+
+			local teleportResult =
+				WaitForTeleportResult()
+
+			--==================================================
+			-- SUCCESS
+			--==================================================
+
+			if teleportResult == "Success" then
+				ResetTeleportState()
+				IsHopping = false
+
+				return
+			end
+
+			--==================================================
+			-- NATIVE FAILURE
+			--==================================================
+
+			if teleportResult == "Failed" then
+				-- TeleportInitFailed already added the server
+				-- to the 10-minute blacklist.
+				ResetTeleportState()
+
+				task.wait(
+					TELEPORT_FAILURE_DELAY
+				)
+
+				continue
+			end
+
+			--==================================================
+			-- SILENT TIMEOUT
+			--==================================================
+
+			if teleportResult == "Timeout" then
+				local failedServerId = TargetServerId
+
+				warn(
+					string.format(
+						"[ServerHop] Teleport timeout | Server: %s",
+						tostring(failedServerId)
+					)
+				)
+
+				if failedServerId then
+					AddIgnoredServer(
+						failedServerId,
+						FAILED_SERVER_IGNORE_TIME
+					)
+
+					pcall(function()
+						SendDebugWebhookMessage(
+							"🐛 Teleport Timeout",
+							string.format(
+								"Server `%s` did not change JobId within %d seconds.",
+								failedServerId,
+								TELEPORT_EVENT_WINDOW
+							)
+						)
 					end)
-					if not teleportOk then
-						lastError = tostring(teleportErr)
-					else
-						lastError = "Teleport call succeeded, waiting for JobId change..."
-					end
-
-                    -- Polling JobId hingga timeout
-					local startTime = os.time()
-					local jobIdChanged = false
-					while os.time() - startTime < teleportTimeout do
-						task.wait(1)
-						local newJobId = game.JobId
-						if newJobId ~= currentJobId then
-							jobIdChanged = true
-							break
-						end
-					end
-					if jobIdChanged then
-						teleportSuccess = true
-						return  -- berhasil, keluar fungsi
-					else
-                        -- Gagal: JobId tidak berubah dalam waktu yang diberikan
-						if teleportOk then
-							lastError = "JobId did not change within " .. teleportTimeout .. " seconds"
-						end
-						warn(string.format("[ServerHop] Attempt %d/%d failed: %s", attempt, maxRetries, lastError))
-						SendDebugWebhook(
-                            string.format("Failed to hop to server `%s`", server.id:sub(1, 8)), string.format("Attempt %d/%d\nError: %s", attempt, maxRetries, lastError))
-
-                        -- Deteksi error yang menandakan server gone
-						local isServerGone = string.find(lastError, "771") or string.find(lastError, "Server is no longer available") or string.find(lastError, "GameEnded") or string.find(lastError, "Unknown exception") or string.find(lastError, "Teleport failed") or string.find(lastError, "cannot teleport") or string.find(lastError, "no longer available")
-						local isTimeout = string.find(lastError, "JobId did not change")
-						if isTimeout then
-						    -- Timeout, jangan langsung ignore, tapi retry lagi (dengan jeda lebih lama)
-							task.wait(5)
-						elseif isServerGone then
-							warn("[ServerHop] Server", server.id, "no longer available, skipping.")
-							AddIgnoredServer(server.id, 300) -- 5 menit
-							break  -- keluar dari retry loop, lanjut server berikutnya
-						end
-
-                        -- Rate limit
-						if string.find(lastError, "772") or string.find(lastError, "TooManyRequests") then
-							task.wait(rateLimitCooldown)
-						else
-							task.wait(2)
-						end
-						if attempt >= maxRetries then
-							AddIgnoredServer(server.id, 600) -- 10 menit
-						end
-					end
 				end
-				if not teleportSuccess then
-					warn("[ServerHop] All retries failed for server:", server.id)
-					task.wait(hopCooldown)
-				end
+
+				pcall(function()
+					Library:Notify({
+						Title = "⚠️ Teleport Timeout",
+						Description = string.format(
+							"Server %s tidak berpindah. Mencoba server lain.",
+							tostring(failedServerId):sub(1, 8)
+						),
+						Time = 2.5
+					})
+				end)
+
+				ResetTeleportState()
+
+				task.wait(
+					TELEPORT_FAILURE_DELAY
+				)
+
+				continue
 			end
 		end
 
-        -- Cursor management
-		cursor = result.nextPageCursor or ""
-		if cursor == "" then
-		    -- Reset ke awal setelah halaman terakhir
-			cursor = ""
-			task.wait(3)
-		else
-			task.wait(0.5)
+		--==================================================
+		-- PAGINATION
+		--==================================================
+
+		if not foundServer then
+			local nextCursor =
+				result.nextPageCursor or ""
+
+			if nextCursor ~= "" then
+				cursor = nextCursor
+				task.wait(PAGE_DELAY)
+			else
+				cursor = ""
+
+				Library:Notify({
+					Title = "⚠️ Server Hop",
+					Description = "Tidak ada server 1–3 player yang cocok.",
+					Time = 2
+				})
+
+				task.wait(
+					NO_SERVER_DELAY
+				)
+			end
 		end
 	end
+
+	ResetTeleportState()
+	IsHopping = false
 end
+
 --==================================================
--- AUTO FARM TOGGLE
+-- AUTO SERVER HOP
 --==================================================
-AutoFarmGroup:AddToggle("EnableAutoFarm", {
-	Text = "Enable Auto Farm",
-	Tooltip = "Teleport Survivor to the detected finish location",
-	Default = false,
-})
---==================================================
--- AUTO SERVERHOP
---==================================================
+
 AutoFarmGroup:AddToggle("ServerHop", {
 	Text = "Server Hop",
 	Tooltip = "Hop to 1-3 player servers when round is active",
 	Default = false,
+
 	Callback = function(Value)
 		if Value then
 			task.spawn(function()
@@ -744,6 +1125,15 @@ AutoFarmGroup:AddToggle("ServerHop", {
 			end)
 		end
 	end,
+})
+
+--==================================================
+-- AUTO FARM TOGGLE
+--==================================================
+AutoFarmGroup:AddToggle("EnableAutoFarm", {
+	Text = "Enable Auto Farm",
+	Tooltip = "Teleport Survivor to the detected finish location",
+	Default = false,
 })
 --==================================================
 -- AUTO EXECUTE
