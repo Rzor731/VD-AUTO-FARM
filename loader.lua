@@ -1105,7 +1105,7 @@ ServerHop = function()
 			-- START TELEPORT
 			--==================================================
 
-			task.wait(1.5)
+			task.wait(2)
 
 			local teleportStarted =
 				TryTeleport(serverId)
