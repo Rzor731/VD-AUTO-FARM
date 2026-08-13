@@ -757,9 +757,9 @@ TeleportService.TeleportInitFailed:Connect(
 
 			pcall(function()
 				Library:Notify({
-					Title = "❌ Teleport Failed",
+					Title = "❌ Teleport Failed   \n",
 					Description = string.format(
-						"Server %s gagal. Blacklist 10 menit.",
+						"Server %s gagal. Blacklist 10 menit.   ",
 						targetId:sub(1, 8)
 					),
 					Time = 3
@@ -1026,9 +1026,9 @@ ServerHop = function()
 			)
 
 			Library:Notify({
-				Title = "📡 Teleporting",
+				Title = "📡 Teleporting   \n",
 				Description = string.format(
-					"%d player | Server %s",
+					"%d player | Server %s   ",
 					playerCount,
 					serverId:sub(1, 8)
 				),
@@ -1118,9 +1118,9 @@ ServerHop = function()
 
 				pcall(function()
 					Library:Notify({
-						Title = "⚠️ Teleport Timeout",
+						Title = "⚠️ Teleport Timeout   \n",
 						Description = string.format(
-							"Server %s tidak berpindah. Mencoba server lain.",
+							"Server %s tidak berpindah. Mencoba server lain.   ",
 							tostring(failedServerId):sub(1, 8)
 						),
 						Time = 2.5
@@ -1152,8 +1152,8 @@ ServerHop = function()
 				cursor = ""
 
 				Library:Notify({
-					Title = "⚠️ Server Hop",
-					Description = "Tidak ada server 1–3 player yang cocok.",
+					Title = "⚠️ Server Hop   \n",
+					Description = "Tidak ada server 1–3 player yang cocok.   ",
 					Time = 2
 				})
 
@@ -1167,11 +1167,17 @@ ServerHop = function()
 	ResetTeleportState()
 	IsHopping = false
 end
-
+--==================================================
+-- AUTO FARM TOGGLE
+--==================================================
+AutoFarmGroup:AddToggle("EnableAutoFarm", {
+	Text = "Enable Auto Farm",
+	Tooltip = "Teleport Survivor to the detected finish location",
+	Default = false,
+})
 --==================================================
 -- AUTO SERVER HOP
 --==================================================
-
 AutoFarmGroup:AddToggle("ServerHop", {
 	Text = "Server Hop",
 	Tooltip = "Hop to 1-3 player servers when round is active",
@@ -1184,15 +1190,6 @@ AutoFarmGroup:AddToggle("ServerHop", {
 			end)
 		end
 	end,
-})
-
---==================================================
--- AUTO FARM TOGGLE
---==================================================
-AutoFarmGroup:AddToggle("EnableAutoFarm", {
-	Text = "Enable Auto Farm",
-	Tooltip = "Teleport Survivor to the detected finish location",
-	Default = false,
 })
 --==================================================
 -- AUTO EXECUTE
