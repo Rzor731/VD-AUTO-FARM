@@ -50,8 +50,7 @@ local function NotifyAF(title, desc, icon)
     LastNotifTime = now
     Library:Notify({
         Title = title .. "   \n",
-        Description = desc,
-        Icon = icon or "info",
+        Description = desc .. "   ",
         Time = 3,
     })
 end
@@ -346,7 +345,7 @@ local function BeatGameSurvivor()
     local currentRole = GetRole()
     if BeatState.LastRole ~= currentRole then
         if currentRole == "Survivor" then
-            NotifyAF("🟢 Survivor!", "Ready to farm.", "users")
+            NotifyAF("🟢 Survivor!", "Ready to farm.")
         end
         BeatState.LastRole = currentRole
     end
@@ -357,12 +356,12 @@ local function BeatGameSurvivor()
     -- 3. Karakter & Map
     local root = GetCharacterRoot()
     if not root then
-        NotifyAF("⏳ Waiting", "Character not loaded", "clock")
+        NotifyAF("⏳ Waiting", "Character not loaded")
         return
     end
     local map = game:GetService("Workspace"):FindFirstChild("Map")
     if not map then
-        NotifyAF("⚠️ No Map", "Waiting for map", "alert-triangle")
+        NotifyAF("⚠️ No Map", "Waiting for map")
         return
     end
 
@@ -422,7 +421,7 @@ local function BeatGameSurvivor()
 
     -- 5. Jika finish tidak ditemukan
     if not exitPos then
-        NotifyAF("⚠️ Finish Not Found", "Map unsupported", "alert-triangle")
+        NotifyAF("⚠️ Finish Not Found", "Map unsupported")
         return
     end
 
@@ -439,27 +438,23 @@ local function BeatGameSurvivor()
     end
 
     -- 8. Notifikasi finish ditemukan
-    NotifyAF("📍 Finish Found", "Waiting 3s...", "map-pin")
+    NotifyAF("📍 Finish Found", "Waiting 3s...")
 
     -- 9. Jeda 3 detik (bukan 6) agar lebih responsif
     task.wait(6)
 
     -- 10. Validasi ulang semua kondisi
     if not Toggles.EnableAutoFarm.Value then
-        NotifyAF("⛔ Cancelled", "Toggle turned off", "x")
+        NotifyAF("⛔ Cancelled", "Toggle turned off")
         return
     end
     if GetRole() ~= "Survivor" then
-        NotifyAF("⛔ Cancelled", "Not Survivor anymore", "x")
-        return
-    end
-    if not IsRound then
-        NotifyAF("⛔ Cancelled", "Round ended", "x")
+        NotifyAF("⛔ Cancelled", "Not Survivor anymore")
         return
     end
     local currentRoot = GetCharacterRoot()
     if not currentRoot then
-        NotifyAF("⛔ Cancelled", "Character missing", "x")
+        NotifyAF("⛔ Cancelled", "Character missing")
         return
     end
 
