@@ -587,7 +587,7 @@ local function ServerHop()
 
                 -- Ignore sementara agar tidak dicoba ulang dalam waktu dekat
 				AddIgnoredServer(server.id, 120) -- 2 menit
-				task.wait(3) -- jeda sebelum teleport
+				task.wait(1) -- jeda sebelum teleport
 				local attempt = 0
 				local teleportSuccess = false
 				local lastError = ""
