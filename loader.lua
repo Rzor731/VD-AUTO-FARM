@@ -335,120 +335,145 @@ end
 -- BEAT GAME SURVIVOR
 --==================================================
 local function BeatGameSurvivor()
-	if not Toggles.EnableAutoFarm.Value then
-		BeatState.BeatSurvivorDone = false
-		BeatState.LastFinishPos = nil
-		return
-	end
-	local currentRole = GetRole()
-	-- [NOTIF 2] Role berubah menjadi Survivor
+    -- 1. Cek toggle
+    if not Toggles.EnableAutoFarm.Value then
+        BeatState.BeatSurvivorDone = false
+        BeatState.LastFinishPos = nil
+        return
+    end
+
+    -- 2. Role check + notifikasi
+    local currentRole = GetRole()
     if BeatState.LastRole ~= currentRole then
         if currentRole == "Survivor" then
-            NotifyAF("🟢 Survivor!", "Ready to farm.   ", "users")
+            NotifyAF("🟢 Survivor!", "Ready to farm.", "users")
         end
         BeatState.LastRole = currentRole
     end
-
     if currentRole ~= "Survivor" then
         return
     end
-	local root = GetCharacterRoot()
-	if not root then
-		return
-	end
-	local Workspace = game:GetService("Workspace")
-	local map = Workspace:FindFirstChild("Map")
-	if not map then
-		return
-	end
-	local exitPos = nil
-	pcall(function()
-		if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
-			exitPos = Vector3.new(3098.16, 454.04, - 4918.74)
-			return
-		end
-		if map:FindFirstChild("HooksMeat") then
-			exitPos = Vector3.new(1546.12, 152.21, - 796.72)
-			return
-		end
-		if map:FindFirstChild("churchbell") then
-			exitPos = Vector3.new(760.98, - 20.14, - 78.48)
-			return
-		end
-		local finish = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
-		if finish then
-			if finish:IsA("BasePart") then
-				exitPos = finish.Position
-			elseif finish:IsA("Model") then
-				local part = finish:FindFirstChildWhichIsA("BasePart")
-				if part then
-					exitPos = part.Position
-				end
-			end
-			return
-		end
-		for _, obj in ipairs(map:GetDescendants()) do
-			if obj.Name:lower():find("finish") then
-				if obj:IsA("BasePart") then
-					exitPos = obj.Position
-					break
-				elseif obj:IsA("Model") then
-					local part = obj:FindFirstChildWhichIsA("BasePart")
-					if part then
-						exitPos = part.Position
-						break
-					end
-				end
-			end
-		end
-		if not exitPos then
-			for _, obj in ipairs(map:GetDescendants()) do
-				if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
-					exitPos = Vector3.new(
-                        - 947.90, 152.12, - 7579.52)
-					break
-				end
-			end
-		end
-		if not exitPos then
-			for _, obj in ipairs(map:GetDescendants()) do
-				if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
-					exitPos = Vector3.new(1546.12, 152.21, - 796.72)
-					break
-				end
-			end
-		end
-	end)
-	if not exitPos then
-		return
-	end
-	if BeatState.LastFinishPos then
-		local dist = (exitPos - BeatState.LastFinishPos).Magnitude
-		if dist > 50 then
-			BeatState.BeatSurvivorDone = false
-		end
-	end
-	if BeatState.BeatSurvivorDone then
-		return
-	end
-	task.wait(6)
-	if not Toggles.EnableAutoFarm.Value then return end
-    if GetRole() ~= "Survivor" then return end
-    if not IsRound then return end
 
+    -- 3. Karakter & Map
+    local root = GetCharacterRoot()
+    if not root then
+        NotifyAF("⏳ Waiting", "Character not loaded", "clock")
+        return
+    end
+    local map = game:GetService("Workspace"):FindFirstChild("Map")
+    if not map then
+        NotifyAF("⚠️ No Map", "Waiting for map", "alert-triangle")
+        return
+    end
+
+    -- 4. Deteksi finish (sama seperti sebelumnya)
+    local exitPos = nil
+    pcall(function()
+        if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
+            exitPos = Vector3.new(3098.16, 454.04, -4918.74)
+            return
+        end
+        if map:FindFirstChild("HooksMeat") then
+            exitPos = Vector3.new(1546.12, 152.21, -796.72)
+            return
+        end
+        if map:FindFirstChild("churchbell") then
+            exitPos = Vector3.new(760.98, -20.14, -78.48)
+            return
+        end
+        local finish = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
+        if finish then
+            if finish:IsA("BasePart") then
+                exitPos = finish.Position
+            elseif finish:IsA("Model") then
+                local part = finish:FindFirstChildWhichIsA("BasePart")
+                if part then exitPos = part.Position end
+            end
+            return
+        end
+        for _, obj in ipairs(map:GetDescendants()) do
+            if obj.Name:lower():find("finish") then
+                if obj:IsA("BasePart") then
+                    exitPos = obj.Position
+                    break
+                elseif obj:IsA("Model") then
+                    local part = obj:FindFirstChildWhichIsA("BasePart")
+                    if part then exitPos = part.Position break end
+                end
+            end
+        end
+        if not exitPos then
+            for _, obj in ipairs(map:GetDescendants()) do
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
+                    exitPos = Vector3.new(-947.90, 152.12, -7579.52)
+                    break
+                end
+            end
+        end
+        if not exitPos then
+            for _, obj in ipairs(map:GetDescendants()) do
+                if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
+                    exitPos = Vector3.new(1546.12, 152.21, -796.72)
+                    break
+                end
+            end
+        end
+    end)
+
+    -- 5. Jika finish tidak ditemukan
+    if not exitPos then
+        NotifyAF("⚠️ Finish Not Found", "Map unsupported", "alert-triangle")
+        return
+    end
+
+    -- 6. Reset state jika map berubah
+    if BeatState.LastFinishPos then
+        if (exitPos - BeatState.LastFinishPos).Magnitude > 50 then
+            BeatState.BeatSurvivorDone = false
+        end
+    end
+
+    -- 7. Cegah teleport berulang di ronde yang sama
+    if BeatState.BeatSurvivorDone then
+        return
+    end
+
+    -- 8. Notifikasi finish ditemukan
+    NotifyAF("📍 Finish Found", "Waiting 3s...", "map-pin")
+
+    -- 9. Jeda 3 detik (bukan 6) agar lebih responsif
+    task.wait(6)
+
+    -- 10. Validasi ulang semua kondisi
+    if not Toggles.EnableAutoFarm.Value then
+        NotifyAF("⛔ Cancelled", "Toggle turned off", "x")
+        return
+    end
+    if GetRole() ~= "Survivor" then
+        NotifyAF("⛔ Cancelled", "Not Survivor anymore", "x")
+        return
+    end
+    if not IsRound then
+        NotifyAF("⛔ Cancelled", "Round ended", "x")
+        return
+    end
     local currentRoot = GetCharacterRoot()
-    if not currentRoot then return end
+    if not currentRoot then
+        NotifyAF("⛔ Cancelled", "Character missing", "x")
+        return
+    end
 
-    -- [NOTIF 4] Sebelum teleport
-    NotifyAF("🚀 Teleporting", "Moving to finish...   ", "send")
-	
-	currentRoot.CFrame = CFrame.new(
-        exitPos + Vector3.new(0, 0, 0))
-	BeatState.BeatSurvivorDone = true
-	BeatState.LastFinishPos = exitPos
-	NotifyAF("✅ Teleport Success", "Round completed!   ", "check")
-	task.wait(5)
-	SendDiscordWebhook()
+    -- 11. Teleport!
+    NotifyAF("🚀 Teleporting", "Moving to finish...", "send")
+    currentRoot.CFrame = CFrame.new(exitPos + Vector3.new(0, 0, 0))
+    BeatState.BeatSurvivorDone = true
+    BeatState.LastFinishPos = exitPos
+
+    NotifyAF("✅ Teleport Success", "Round completed!", "check")
+
+    -- 12. Kirim webhook setelah 5 detik
+    task.wait(5)
+    SendDiscordWebhook()
 end
 --==================================================
 -- SERVER HOP
