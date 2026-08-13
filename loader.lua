@@ -1,9 +1,26 @@
 --==================================================
 -- OBSIDIAN UI + BEAT SURVIVOR
 --==================================================
-pcall(function()
-	setfflag("TeleportService", "DisableTeleportErrors", "true")
+--==================================================
+-- NONAKTIFKAN POPUP ERROR TELEPORT
+--==================================================
+pcall(function() game:GetService("GuiService"):SetErrorPromptEnabled(false) end)
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            for _, obj in ipairs(game:GetService("CoreGui"):GetDescendants()) do
+                if obj:IsA("ScreenGui") and (string.find(obj.Name:lower(), "error") or string.find(obj.Name:lower(), "teleport")) then
+                    obj:Destroy()
+                end
+            end
+        end)
+        task.wait(0.5)
+    end
 end)
+
+pcall(function() setfflag("TeleportService", "DisableTeleportErrors", "true") end)
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
