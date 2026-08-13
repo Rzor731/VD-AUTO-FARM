@@ -459,12 +459,12 @@ local function BeatGameSurvivor()
     end
 
     -- 11. Teleport!
-    NotifyAF("🚀 Teleporting", "Moving to finish...", "send")
+    NotifyAF("🚀 Teleporting", "Moving to finish...")
     currentRoot.CFrame = CFrame.new(exitPos + Vector3.new(0, 0, 0))
     BeatState.BeatSurvivorDone = true
     BeatState.LastFinishPos = exitPos
 
-    NotifyAF("✅ Teleport Success", "Round completed!", "check")
+    NotifyAF("✅ Teleport Success", "Round completed!")
 
     -- 12. Kirim webhook setelah 5 detik
     task.wait(5)
