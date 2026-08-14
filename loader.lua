@@ -167,7 +167,7 @@ end
 -- WEBHOOK SYSTEM
 --==================================================
 -- Webhook khusus untuk debug (tidak update snapshot)
-local function SendDebugWebhookMessage(title, description)
+local function SendDebugWebhook(title, description)
 	if not Toggles.EnableWebhook or not Toggles.EnableWebhook.Value then
 		return false
 	end
@@ -830,7 +830,7 @@ TeleportService.TeleportInitFailed:Connect(
 			end)
 
 			pcall(function()
-				SendDebugWebhookMessage(
+				SendDebugWebhook(
 					"🐛 Server Hop Error",
 					string.format(
 						"Server: `%s`\nCode: `%s`\nError: `%s`",
@@ -879,7 +879,7 @@ local function TryTeleport(serverId)
 		)
 
 		pcall(function()
-			SendDebugWebhookMessage(
+			SendDebugWebhook(
 				"🐛 Teleport Call Failed",
 				string.format(
 					"Server: `%s`\nError: `%s`",
@@ -1173,7 +1173,7 @@ ServerHop = function()
 					)
 
 					pcall(function()
-						SendDebugWebhookMessage(
+						SendDebugWebhook(
 							"🐛 Teleport Timeout",
 							string.format(
 								"Server `%s` did not change JobId within %d seconds.",
