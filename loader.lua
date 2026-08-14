@@ -585,7 +585,7 @@ ServerHop = function()
 			if not forced and not CanHop() then
 				break
 			end
-			if srv.id and srv.id ~= curJob and srv.playing and srv.playing >= 1 and srv.playing <= 3 and not IsIgnored(srv.id) then
+			if srv.id and srv.id ~= curJob and srv.playing == 2 and not IsIgnored(srv.id) then
 				found = true
 				local id = srv.id
 				local count = srv.playing
