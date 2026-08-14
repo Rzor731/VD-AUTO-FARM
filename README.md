@@ -12,7 +12,7 @@ Automated Lua script for **Roblox Violence District** featuring Survivor auto fa
 ![Roblox](https://img.shields.io/badge/Platform-Roblox-E2231A?style=for-the-badge&logo=roblox)
 ![Status](https://img.shields.io/badge/Status-Active-22C55E?style=for-the-badge)
 ![Version](https://img.shields.io/badge/Version-v1.0-blue?style=for-the-badge)
-![License](https://img.shields.io/github/license/Rzor731/VD-AUTO-FARM?style=for-the-badge)
+![License](https://img.shields.io/github/license/Rzor731/VD-AUTO-FARM?style=for-the-badge&v=1)
 
 </div>
 
