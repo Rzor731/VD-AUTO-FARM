@@ -769,7 +769,7 @@ SaveManager:SetLibrary(Library)
 ThemeManager:SetFolder("AutoFarm")
 SaveManager:SetFolder("AutoFarm")
 SaveManager:SetSubFolder("Settings")
-ThemeManager:IgnoreThemeSettings()
+SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({
 	"MenuKeybind",
 })
