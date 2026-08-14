@@ -4,7 +4,7 @@
   <img src="https://i.ibb.co.com/mVxPwkN4/no-Filter.webp" width="240">
 </a>
 
-# Auto Farm Script
+# Violence District — Auto Farm
 
 Automated Lua script for **Roblox Violence District** featuring Survivor auto farming, low-population server hopping, Discord webhook integration, and automatic re-execution.
 
