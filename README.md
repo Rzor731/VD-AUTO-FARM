@@ -120,7 +120,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/
 
 ## 🙏 Credits
 
-- **Obsidian UI** – by deividcomsono  
+- **Obsidian UI** – by [deividcomsono](https://github.com/deividcomsono)  
 - **VD-AUTO-FARM** – developed and maintained by Rzor731  
 
 ---
