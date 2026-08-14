@@ -642,7 +642,7 @@ AutoFarmGroup:AddToggle("EnableAutoFarm", {
 })
 AutoFarmGroup:AddToggle("ServerHop", {
 	Text = "Server Hop",
-	Tooltip = "Hop to 1-3 player servers when round is active",
+	Tooltip = "Hop to 2 player servers when round is active",
 	Default = false,
 	Callback = function(v)
 		if v then
