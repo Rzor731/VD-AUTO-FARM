@@ -1,61 +1,43 @@
--- ================================================================
--- NETWORK DESYNC + GHOST VISUAL
--- Berdasarkan script 6locc (Violence District)
--- ================================================================
+-- ============================================================
+-- DESYNC + GHOST VISUAL (Standalone, tanpa library)
+-- Berdasarkan 6locc violence district
+-- ============================================================
 
--- Load ModernV2 (pastikan URL benar)
-local ModernV2 = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
-
--- Service references
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- ================================================================
--- 1. KONFIGURASI DEFAULT
--- ================================================================
+-- Konfigurasi
 local Config = {
     Desync = false,
-    EnableDesyncGhost = true,
-    DesyncGhostAlwaysOnTop = true,
-    DesyncGhostTransparency = 0.5,
-    DesyncGhostColor = "Accent",  -- "Accent", "Cyan", "Purple", "Green", "Red", "Yellow", "White"
+    ShowGhost = true,
+    GhostColor = Color3.fromRGB(255, 42, 109), -- accent
+    GhostTransparency = 0.5,
+    GhostAlwaysOnTop = true,
 }
 
--- ================================================================
--- 2. VARIABEL INTERNAL
--- ================================================================
-local ghostModel = nil          -- Model ghost (duplikat karakter)
-local isDesyncActive = false    -- Status desync
-local lastGhostCFrame = nil     -- Posisi terakhir untuk ghost
+-- Variabel
+local ghostModel = nil
+local isDesyncActive = false
+local desyncConnection = nil
+local ghostCreated = false
 
--- ================================================================
--- 3. FUNGSI GHOST VISUAL
--- ================================================================
+-- ============================================================
+-- FUNGSI GHOST
+-- ============================================================
 local function destroyGhost()
     if ghostModel then
         pcall(function() ghostModel:Destroy() end)
         ghostModel = nil
     end
-end
-
-local function getColorByName(name)
-    local colors = {
-        Accent = Color3.fromRGB(255, 42, 109),
-        Cyan = Color3.fromRGB(0, 255, 255),
-        Purple = Color3.fromRGB(180, 50, 255),
-        Green = Color3.fromRGB(0, 255, 120),
-        Red = Color3.fromRGB(255, 60, 60),
-        Yellow = Color3.fromRGB(255, 220, 0),
-        White = Color3.fromRGB(255, 255, 255),
-    }
-    return colors[name] or colors.Accent
+    ghostCreated = false
 end
 
 local function createGhost(character)
     destroyGhost()
     if not character then return end
-
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
@@ -63,7 +45,7 @@ local function createGhost(character)
     ghost.Name = "DesyncGhost"
     ghost.Parent = workspace
 
-    -- Duplikat semua BasePart (kecuali HumanoidRootPart)
+    -- Clone parts
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
             local clone = part:Clone()
@@ -71,59 +53,39 @@ local function createGhost(character)
             clone.CanCollide = false
             clone.CastShadow = false
             clone.Transparency = 0.99
-            clone.Color = getColorByName(Config.DesyncGhostColor)
+            clone.Color = Config.GhostColor
             clone.Material = Enum.Material.SmoothPlastic
             clone.Parent = ghost
         end
     end
 
-    -- Highlight untuk ghost
+    -- Highlight
     local highlight = Instance.new("Highlight")
     highlight.Name = "GhostHighlight"
-    highlight.FillColor = getColorByName(Config.DesyncGhostColor)
-    highlight.FillTransparency = Config.DesyncGhostTransparency
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillColor = Config.GhostColor
+    highlight.FillTransparency = Config.GhostTransparency
+    highlight.OutlineColor = Color3.fromRGB(255,255,255)
     highlight.OutlineTransparency = 0.1
-    highlight.DepthMode = Config.DesyncGhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+    highlight.DepthMode = Config.GhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
     highlight.Adornee = ghost
     highlight.Enabled = true
     highlight.Parent = ghost
 
-    -- Posisi ghost = posisi karakter saat desync diaktifkan
-    for _, part in ipairs(ghost:GetChildren()) do
-        if part:IsA("BasePart") then
-            local origName = part:GetAttribute("OriginalPartName")
-            if origName then
-                local origPart = character:FindFirstChild(origName, true)
-                if origPart then
-                    part.CFrame = root.CFrame:ToObjectSpace(origPart.CFrame)
-                end
-            end
-        end
+    ghostModel = ghost
+    ghostCreated = true
+end
+
+-- ============================================================
+-- DESYNC LOOP
+-- ============================================================
+local function startDesyncLoop()
+    if desyncConnection then
+        desyncConnection:Disconnect()
+        desyncConnection = nil
     end
 
-    ghostModel = ghost
-    lastGhostCFrame = root.CFrame
-end
-
-local function updateGhostPosition(character)
-    if not ghostModel or not character then return end
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    -- Update posisi ghost mengikuti root (jika desync aktif, posisi ghost tetap di posisi awal? Di 6locc ghost tetap diam)
-    -- Tapi untuk efek yang lebih realistis, kita bisa update ghost sesuai posisi root sebenarnya.
-    -- Di script 6locc, ghost tidak di-update posisinya, hanya dibuat sekali saat desync aktif.
-    -- Kita akan biarkan ghost diam di posisi awal.
-end
-
--- ================================================================
--- 4. LOOP DESYNC (Heartbeat)
--- ================================================================
-local function startDesyncLoop()
-    local connection = RunService.Heartbeat:Connect(function(dt)
+    desyncConnection = RunService.Heartbeat:Connect(function(dt)
         if not Config.Desync then
-            -- Jika desync dimatikan, lepas anchor dan hapus ghost
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if root then root.Anchored = false end
@@ -144,181 +106,260 @@ local function startDesyncLoop()
             return
         end
 
-        -- Aktifkan desync
         if not isDesyncActive then
             isDesyncActive = true
             root.Anchored = true
-            -- Buat ghost saat pertama kali desync aktif
-            if Config.EnableDesyncGhost then
+            if Config.ShowGhost then
                 createGhost(char)
             end
         end
 
-        -- Gerakkan root sesuai arah gerakan (MoveDirection)
         local moveDir = humanoid.MoveDirection
         if moveDir.Magnitude > 0 then
             local speed = humanoid.WalkSpeed
             root.CFrame = root.CFrame + (moveDir * (speed * dt))
         end
-
-        -- Update ghost position (jika ada)
-        if ghostModel then
-            -- Di sini kita biarkan ghost diam di posisi awal (tidak diupdate)
-            -- Agar terlihat seperti posisi asli karakter sebelum desync
-        end
     end)
-
-    return connection
 end
 
--- ================================================================
--- 5. BUAT UI MENGGUNAKAN MODERNV2
--- ================================================================
-local Window = ModernV2:CreateWindow({
-    Name = "Network Desync",
-    Content = "v1.0 – Ghost Visual",
-    Icon = "lucide:network",
-    Size = ModernV2.Scales.Default,
-})
+-- ============================================================
+-- UI SEDERHANA
+-- ============================================================
+local function createUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "DesyncUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Tab utama
-local Tab = Window:AddTab({ Name = "Desync", Icon = "lucide:zap" })
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 260, 0, 250)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -125)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20,22,27)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
+    mainFrame.Parent = screenGui
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0,10)
+    Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(45,48,58)
 
--- Section kiri
-local LeftGroup = Tab:AddSection({
-    Name = "Desync Settings",
-    Position = "Left",
-    Icon = "lucide:settings",
-    Box = true,
-})
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1,0,0,30)
+    title.Position = UDim2.new(0,0,0,5)
+    title.BackgroundTransparency = 1
+    title.Text = "Desync / Ghost"
+    title.TextColor3 = Color3.fromRGB(255,255,255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.Parent = mainFrame
 
--- Toggle Desync
-LeftGroup:AddToggle({
-    Name = "Enable Desync",
-    Flag = "DesyncToggle",
-    Default = false,
-    Callback = function(value)
-        Config.Desync = value
-        if not value then
-            -- Nonaktifkan anchor dan ghost
+    -- Toggle Desync
+    local desyncBtn = Instance.new("TextButton")
+    desyncBtn.Size = UDim2.new(0,120,0,30)
+    desyncBtn.Position = UDim2.new(0,10,0,45)
+    desyncBtn.BackgroundColor3 = Color3.fromRGB(30,32,40)
+    desyncBtn.Text = "Desync OFF"
+    desyncBtn.TextColor3 = Color3.fromRGB(200,200,200)
+    desyncBtn.Font = Enum.Font.GothamBold
+    desyncBtn.TextSize = 13
+    desyncBtn.Parent = mainFrame
+    Instance.new("UICorner", desyncBtn).CornerRadius = UDim.new(0,5)
+
+    -- Toggle Ghost
+    local ghostBtn = Instance.new("TextButton")
+    ghostBtn.Size = UDim2.new(0,120,0,30)
+    ghostBtn.Position = UDim2.new(0,130,0,45)
+    ghostBtn.BackgroundColor3 = Color3.fromRGB(30,32,40)
+    ghostBtn.Text = "Ghost ON"
+    ghostBtn.TextColor3 = Color3.fromRGB(200,200,200)
+    ghostBtn.Font = Enum.Font.GothamBold
+    ghostBtn.TextSize = 13
+    ghostBtn.Parent = mainFrame
+    Instance.new("UICorner", ghostBtn).CornerRadius = UDim.new(0,5)
+
+    -- Slider Transparency
+    local transLabel = Instance.new("TextLabel")
+    transLabel.Size = UDim2.new(0.5,0,0,20)
+    transLabel.Position = UDim2.new(0,10,0,90)
+    transLabel.BackgroundTransparency = 1
+    transLabel.Text = "Ghost Alpha: 50%"
+    transLabel.TextColor3 = Color3.fromRGB(200,200,200)
+    transLabel.Font = Enum.Font.Gotham
+    transLabel.TextSize = 12
+    transLabel.Parent = mainFrame
+
+    local transSlider = Instance.new("TextButton")
+    transSlider.Size = UDim2.new(0,100,0,8)
+    transSlider.Position = UDim2.new(0.5,-10,0,95)
+    transSlider.BackgroundColor3 = Color3.fromRGB(50,55,70)
+    transSlider.Text = ""
+    transSlider.Parent = mainFrame
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0.5,0,1,0)
+    fill.BackgroundColor3 = Config.GhostColor
+    fill.BorderSizePixel = 0
+    fill.Parent = transSlider
+    Instance.new("UICorner", transSlider).CornerRadius = UDim.new(1,0)
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+
+    -- Always on top toggle
+    local topBtn = Instance.new("TextButton")
+    topBtn.Size = UDim2.new(0,120,0,25)
+    topBtn.Position = UDim2.new(0,10,0,120)
+    topBtn.BackgroundColor3 = Color3.fromRGB(30,32,40)
+    topBtn.Text = "Always On Top"
+    topBtn.TextColor3 = Color3.fromRGB(200,200,200)
+    topBtn.Font = Enum.Font.GothamBold
+    topBtn.TextSize = 12
+    topBtn.Parent = mainFrame
+    Instance.new("UICorner", topBtn).CornerRadius = UDim.new(0,5)
+
+    -- Color buttons (simple)
+    local colors = {
+        {name="Accent", color=Color3.fromRGB(255,42,109)},
+        {name="Cyan", color=Color3.fromRGB(0,255,255)},
+        {name="Purple", color=Color3.fromRGB(180,50,255)},
+        {name="Green", color=Color3.fromRGB(0,255,120)},
+        {name="Red", color=Color3.fromRGB(255,60,60)},
+        {name="Yellow", color=Color3.fromRGB(255,220,0)},
+    }
+    for i, c in ipairs(colors) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0,28,0,20)
+        btn.Position = UDim2.new(0, 10 + (i-1)*35, 0, 160)
+        btn.BackgroundColor3 = c.color
+        btn.Text = ""
+        btn.Parent = mainFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
+        btn.MouseButton1Click:Connect(function()
+            Config.GhostColor = c.color
+            if ghostModel then
+                local hl = ghostModel:FindFirstChild("GhostHighlight")
+                if hl then hl.FillColor = c.color end
+                for _, p in ipairs(ghostModel:GetChildren()) do
+                    if p:IsA("BasePart") then p.Color = c.color end
+                end
+            end
+            fill.BackgroundColor3 = c.color
+        end)
+    end
+
+    -- Keybind info
+    local keyLabel = Instance.new("TextLabel")
+    keyLabel.Size = UDim2.new(1,0,0,20)
+    keyLabel.Position = UDim2.new(0,0,0,195)
+    keyLabel.BackgroundTransparency = 1
+    keyLabel.Text = "Press K to toggle Desync"
+    keyLabel.TextColor3 = Color3.fromRGB(150,150,170)
+    keyLabel.Font = Enum.Font.Gotham
+    keyLabel.TextSize = 11
+    keyLabel.Parent = mainFrame
+
+    -- ============================================================
+    -- UI LOGIC
+    -- ============================================================
+    local function updateDesyncBtn()
+        desyncBtn.Text = Config.Desync and "Desync ON" or "Desync OFF"
+        desyncBtn.BackgroundColor3 = Config.Desync and Color3.fromRGB(0,180,80) or Color3.fromRGB(60,40,40)
+    end
+    local function updateGhostBtn()
+        ghostBtn.Text = Config.ShowGhost and "Ghost ON" or "Ghost OFF"
+        ghostBtn.BackgroundColor3 = Config.ShowGhost and Color3.fromRGB(0,120,200) or Color3.fromRGB(40,40,60)
+    end
+    local function updateTopBtn()
+        topBtn.BackgroundColor3 = Config.GhostAlwaysOnTop and Color3.fromRGB(0,120,200) or Color3.fromRGB(30,32,40)
+    end
+
+    desyncBtn.MouseButton1Click:Connect(function()
+        Config.Desync = not Config.Desync
+        updateDesyncBtn()
+        if not Config.Desync then
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if root then root.Anchored = false end
             isDesyncActive = false
             destroyGhost()
+        else
+            startDesyncLoop()
         end
-    end,
-})
+    end)
 
--- Toggle Ghost Visual
-LeftGroup:AddToggle({
-    Name = "Show Ghost",
-    Flag = "GhostToggle",
-    Default = true,
-    Callback = function(value)
-        Config.EnableDesyncGhost = value
-        if not value then
+    ghostBtn.MouseButton1Click:Connect(function()
+        Config.ShowGhost = not Config.ShowGhost
+        updateGhostBtn()
+        if not Config.ShowGhost then
             destroyGhost()
         elseif Config.Desync and isDesyncActive then
-            -- Buat ulang ghost jika desync aktif
             local char = LocalPlayer.Character
             if char then createGhost(char) end
         end
-    end,
-})
+    end)
 
--- Warna Ghost (Dropdown)
-LeftGroup:AddDropdown({
-    Name = "Ghost Color",
-    Flag = "GhostColor",
-    Values = {"Accent", "Cyan", "Purple", "Green", "Red", "Yellow", "White"},
-    Default = "Accent",
-    Callback = function(value)
-        Config.DesyncGhostColor = value
-        -- Update warna ghost jika ada
+    topBtn.MouseButton1Click:Connect(function()
+        Config.GhostAlwaysOnTop = not Config.GhostAlwaysOnTop
+        updateTopBtn()
         if ghostModel then
-            local highlight = ghostModel:FindFirstChild("GhostHighlight")
-            if highlight then
-                highlight.FillColor = getColorByName(value)
-            end
-            for _, part in ipairs(ghostModel:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.Color = getColorByName(value)
-                end
+            local hl = ghostModel:FindFirstChild("GhostHighlight")
+            if hl then
+                hl.DepthMode = Config.GhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
             end
         end
-    end,
-})
+    end)
 
--- Transparansi Ghost (Slider)
-LeftGroup:AddSlider({
-    Name = "Ghost Transparency",
-    Flag = "GhostTransparency",
-    Default = 50,
-    Min = 0,
-    Max = 100,
-    Type = "%",
-    Callback = function(value)
-        Config.DesyncGhostTransparency = value / 100
-        if ghostModel then
-            local highlight = ghostModel:FindFirstChild("GhostHighlight")
-            if highlight then
-                highlight.FillTransparency = value / 100
+    -- Slider logic (drag)
+    local dragging = false
+    transSlider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    transSlider.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local pos = input.Position.X - transSlider.AbsolutePosition.X
+            local w = transSlider.AbsoluteSize.X
+            local pct = math.clamp(pos / w, 0, 1)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            transLabel.Text = "Ghost Alpha: " .. math.round(pct * 100) .. "%"
+            Config.GhostTransparency = 1 - pct
+            if ghostModel then
+                local hl = ghostModel:FindFirstChild("GhostHighlight")
+                if hl then hl.FillTransparency = Config.GhostTransparency end
             end
         end
-    end,
-})
+    end)
 
--- Toggle Always On Top
-LeftGroup:AddToggle({
-    Name = "Ghost Always On Top",
-    Flag = "GhostAlwaysOnTop",
-    Default = true,
-    Callback = function(value)
-        Config.DesyncGhostAlwaysOnTop = value
-        if ghostModel then
-            local highlight = ghostModel:FindFirstChild("GhostHighlight")
-            if highlight then
-                highlight.DepthMode = value and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-            end
+    -- Keybind K
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.K then
+            desyncBtn.MouseButton1Click:Fire()
         end
-    end,
-})
+    end)
 
--- Keybind untuk toggle Desync (opsional)
-LeftGroup:AddLabel({ Text = "Keybind" })
-LeftGroup:AddKeybind({
-    Name = "Toggle Desync",
-    Flag = "DesyncKeybind",
-    Default = "None",
-    Mode = "Toggle",
-    Callback = function(state)
-        if state then
-            -- Toggle desync
-            local toggle = ModernV2.Flags.DesyncToggle
-            if toggle and toggle.Toggle then
-                toggle:Toggle()
-            end
-        end
-    end,
-})
+    updateDesyncBtn()
+    updateGhostBtn()
+    updateTopBtn()
 
--- ================================================================
--- 6. JALANKAN DESYNC LOOP
--- ================================================================
-local desyncConnection = startDesyncLoop()
+    return screenGui
+end
 
--- Cleanup saat window di-destroy
-Window.OnDestroy(function()
-    if desyncConnection then
-        desyncConnection:Disconnect()
-    end
+-- ============================================================
+-- INIT
+-- ============================================================
+local ui = createUI()
+startDesyncLoop()
+
+-- Cleanup on exit
+game:BindToClose(function()
+    if desyncConnection then desyncConnection:Disconnect() end
     destroyGhost()
+    if ui then ui:Destroy() end
 end)
 
--- ================================================================
--- 7. TAMPILKAN WINDOW
--- ================================================================
-Window.Signal:SetValue(true)
-
-print("[Desync] Script loaded. Toggle 'Enable Desync' to start.")
+print("[Desync] Standalone UI ready. Press K to toggle.")
