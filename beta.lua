@@ -1,308 +1,260 @@
+-- ============================================================================
 -- Always Fast Vault - Standalone Script
--- Mobile Friendly GUI
--- Credit: 6locc (Violence District)
+-- Ekstrak dari 6locc untuk Violence District
+-- Mobile Friendly, Draggable UI
+-- ============================================================================
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
--- GUI Creation
+-- ============================================================================
+-- 1. BUAT GUI
+-- ============================================================================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FastVaultGUI"
+screenGui.Name = "FastVaultUI"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 100)
-mainFrame.Position = UDim2.new(0.5, -100, 0.85, 0) -- di bawah layar
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-mainFrame.BackgroundTransparency = 0.2
+mainFrame.Size = UDim2.new(0, 160, 0, 60)
+mainFrame.Position = UDim2.new(0.5, -80, 0.5, -30)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
+mainFrame.BackgroundTransparency = 0.1
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = screenGui
 
+-- Sudut melengkung
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 12)
 corner.Parent = mainFrame
 
+-- Garis tepi
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(60, 60, 80)
-stroke.Thickness = 1.5
+stroke.Color = Color3.fromRGB(45, 48, 58)
+stroke.Thickness = 1.2
+stroke.Transparency = 0.5
 stroke.Parent = mainFrame
 
--- Title
+-- Judul
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 0)
+title.Size = UDim2.new(1, 0, 0, 20)
+title.Position = UDim2.new(0, 10, 0, 4)
 title.BackgroundTransparency = 1
-title.Text = "⚡ Fast Vault"
+title.Text = "Fast Vault"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 16
-title.TextXAlignment = Enum.TextXAlignment.Center
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = mainFrame
-
--- Toggle Button
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0.8, 0, 0, 40)
-toggleButton.Position = UDim2.new(0.1, 0, 0.45, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-toggleButton.BackgroundTransparency = 0.3
-toggleButton.Text = "OFF"
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.TextSize = 18
-toggleButton.AutoButtonColor = false
-toggleButton.Parent = mainFrame
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 8)
-btnCorner.Parent = toggleButton
-
-local btnStroke = Instance.new("UIStroke")
-btnStroke.Color = Color3.fromRGB(100, 100, 120)
-btnStroke.Thickness = 1
-btnStroke.Parent = toggleButton
 
 -- Status label
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, 0, 0, 20)
-statusLabel.Position = UDim2.new(0, 0, 0.85, 0)
+statusLabel.Size = UDim2.new(0, 50, 0, 16)
+statusLabel.Position = UDim2.new(0, 10, 0, 30)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Tap vault (E/Space) to fast vault"
-statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 11
-statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+statusLabel.Text = "OFF"
+statusLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 12
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = mainFrame
 
--- State
+-- Toggle button (switch)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 24)
+toggleBtn.Position = UDim2.new(1, -60, 0, 28)
+toggleBtn.AnchorPoint = Vector2.new(1, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = ""
+toggleBtn.AutoButtonColor = false
+toggleBtn.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(45, 48, 58)
+toggleStroke.Thickness = 1
+toggleStroke.Parent = toggleBtn
+
+local toggleThumb = Instance.new("Frame")
+toggleThumb.Size = UDim2.new(0, 18, 0, 18)
+toggleThumb.Position = UDim2.new(0, 3, 0.5, -9)
+toggleThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+toggleThumb.BorderSizePixel = 0
+toggleThumb.Parent = toggleBtn
+
+local thumbCorner = Instance.new("UICorner")
+thumbCorner.CornerRadius = UDim.new(1, 0)
+thumbCorner.Parent = toggleThumb
+
+-- ============================================================================
+-- 2. DRAGGABLE FRAME (Support Touch & Mouse)
+-- ============================================================================
+local dragToggle = false
+local dragStart, startPos
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragToggle = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+mainFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragToggle = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- ============================================================================
+-- 3. STATE & TOGGLE LOGIC
+-- ============================================================================
 local enabled = false
-local isVaulting = false
 
--- ==== ALGORITMA ALWAYS FAST VAULT (dari 6locc) ====
-
--- 1. Hook VaultEvent remote agar selalu mengirim parameter true untuk fast vault
--- 2. Mainkan animasi fast vault (83873880822918)
--- 3. Deteksi input E atau Space saat di dekat vault, lalu force sprint dan teleport ke arah vault
-
--- Kumpulkan semua VaultTrigger / VaultPoint di map
-local vaultPoints = {}
-local function refreshVaults()
-    table.clear(vaultPoints)
-    local map = workspace:FindFirstChild("Map") or workspace
-    for _, obj in ipairs(map:GetDescendants()) do
-        if (obj.Name == "VaultTrigger" or obj.Name == "VaultPoint") and obj:IsA("BasePart") then
-            table.insert(vaultPoints, obj)
-        end
+local function updateToggleUI()
+    if enabled then
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(78, 127, 252)  -- accent color
+        toggleStroke.Color = Color3.fromRGB(78, 127, 252)
+        toggleThumb.Position = UDim2.new(1, -21, 0.5, -9)
+        statusLabel.Text = "ON"
+        statusLabel.TextColor3 = Color3.fromRGB(78, 127, 252)
+    else
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+        toggleStroke.Color = Color3.fromRGB(45, 48, 58)
+        toggleThumb.Position = UDim2.new(0, 3, 0.5, -9)
+        statusLabel.Text = "OFF"
+        statusLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
     end
 end
-refreshVaults()
--- Update saat map berubah
-workspace.DescendantAdded:Connect(function(inst)
-    if (inst.Name == "VaultTrigger" or inst.Name == "VaultPoint") and inst:IsA("BasePart") then
-        table.insert(vaultPoints, inst)
-    end
-end)
-workspace.DescendantRemoving:Connect(function(inst)
-    if (inst.Name == "VaultTrigger" or inst.Name == "VaultPoint") and inst:IsA("BasePart") then
-        for i, v in ipairs(vaultPoints) do
-            if v == inst then
-                table.remove(vaultPoints, i)
-                break
-            end
-        end
-    end
+
+-- Klik / Tap untuk toggle
+toggleBtn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    updateToggleUI()
 end)
 
--- Cari VaultTrigger terdekat dari posisi player
-local function getNearestVaultTrigger(rootPos)
-    local nearest, minDist = nil, 12 -- radius 12 studs
-    for _, v in ipairs(vaultPoints) do
-        if v and v.Parent then
-            local dist = (v.Position - rootPos).Magnitude
-            if dist < minDist then
-                minDist = dist
-                nearest = v
-            end
-        end
-    end
-    return nearest
-end
+toggleBtn.TouchTap:Connect(function()
+    enabled = not enabled
+    updateToggleUI()
+end)
 
--- Fast vault animation ID
-local FAST_VAULT_ANIM_ID = "83873880822918"
+updateToggleUI()
 
--- Variable untuk animator
-local fastAnimTrack = nil
-local animator = nil
+-- ============================================================================
+-- 4. CORE FAST VAULT LOGIC (diambil dari 6locc)
+-- ============================================================================
 
--- Fungsi untuk memuat dan memainkan animasi fast vault
-local function playFastVaultAnim(character)
+local function setupFastVault(character)
     if not character then return end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
-    local anim = humanoid:FindFirstChildOfClass("Animator")
-    if not anim then
-        anim = Instance.new("Animator")
-        anim.Parent = humanoid
-    end
-    animator = anim
+    local animator = humanoid:FindFirstChildOfClass("Animator") or humanoid
+    if not animator then return end
 
-    -- Hentikan animasi sebelumnya
-    if fastAnimTrack then
-        pcall(fastAnimTrack.Stop, fastAnimTrack)
-        fastAnimTrack = nil
-    end
-
-    -- Buat animasi baru
-    local animation = Instance.new("Animation")
-    animation.AnimationId = "rbxassetid://" .. FAST_VAULT_ANIM_ID
-    local track = anim:LoadAnimation(animation)
-    if track then
-        track.Priority = Enum.AnimationPriority.Action
-        track:Play(0.02)
-        fastAnimTrack = track
-    end
-end
-
--- Fungsi untuk melakukan fast vault
-local function doFastVault(character)
-    if not enabled then return end
-    if not character then return end
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    -- Cari vault terdekat
-    local trigger = getNearestVaultTrigger(root.Position)
-    if not trigger then return end
-
-    -- Set attribute sprinting dan running (agar vault dianggap fast)
+    -- Load fast vault animation (ID dari 6locc)
+    local fastVaultAnim = Instance.new("Animation")
+    fastVaultAnim.AnimationId = "rbxassetid://83873880822918"
+    local fastVaultTrack
     pcall(function()
-        character:SetAttribute("Sprinting", true)
-        character:SetAttribute("IsRunning", true)
+        fastVaultTrack = animator:LoadAnimation(fastVaultAnim)
+        if fastVaultTrack then
+            fastVaultTrack.Priority = Enum.AnimationPriority.Action
+        end
     end)
 
-    -- Arahkan karakter ke trigger
-    local dir = (trigger.Position - root.Position)
-    local flatDir = Vector3.new(dir.X, 0, dir.Z)
-    if flatDir.Magnitude > 0.5 then
-        flatDir = flatDir.Unit
-        root.CFrame = CFrame.new(root.Position, root.Position + flatDir)
-    end
-
-    -- Force sprint velocity
-    root.AssemblyLinearVelocity = flatDir * 22
-
-    -- Mainkan animasi fast vault
-    playFastVaultAnim(character)
-
-    -- Kirim remote event VaultEvent dengan parameter true
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if remotes then
-        local vaultEvent = remotes:FindFirstChild("Window") and remotes.Window:FindFirstChild("VaultEvent")
-        if vaultEvent then
-            pcall(function()
-                vaultEvent:FireServer(trigger, true)
-            end)
-        end
-        -- Coba juga VaultCompleteEvent jika ada
-        local vaultComplete = remotes:FindFirstChild("Window") and remotes.Window:FindFirstChild("VaultCompleteEvent")
-        if vaultComplete then
-            pcall(function()
-                vaultComplete:FireServer(trigger, false) -- false = selesai vault?
-            end)
-        end
-    end
-end
-
--- Hook VaultEvent agar selalu mengirim true saat enabled
-local originalFireServer = nil
-local hookActive = false
-
-local function setupHook()
-    if hookActive then return end
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes then return end
-    local window = remotes:FindFirstChild("Window")
-    if not window then return end
-    local vaultEvent = window:FindFirstChild("VaultEvent")
-    if not vaultEvent then return end
-
-    if not hookmetamethod or not getnamecallmethod then
-        -- Fallback: tangani dengan InputBegan langsung (tanpa hook remote)
-        return
-    end
-
-    originalFireServer = hookmetamethod(vaultEvent, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        if method == "FireServer" and enabled then
-            local args = {...}
-            if #args >= 2 then
-                -- Ubah parameter kedua menjadi true (fast vault)
-                args[2] = true
-                return originalFireServer(self, unpack(args))
-            end
-        end
-        return originalFireServer(self, ...)
-    end)
-    hookActive = true
-end
-
--- Jika hook gagal, gunakan input detection alternatif
-local function setupInputHandler()
-    -- Detect E or Space
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
+    -- Listen animation played
+    local connection
+    connection = animator.AnimationPlayed:Connect(function(animationTrack)
         if not enabled then return end
+        if not character or not character.Parent then
+            if connection then connection:Disconnect() end
+            return
+        end
 
-        local key = input.KeyCode
-        if key == Enum.KeyCode.E or key == Enum.KeyCode.Space then
-            local char = LocalPlayer.Character
-            if char then
-                doFastVault(char)
+        local animId = animationTrack.Animation and animationTrack.Animation.AnimationId or ""
+        local animName = animationTrack.Name or ""
+        animId = string.lower(tostring(animId))
+        animName = string.lower(tostring(animName))
+
+        -- Deteksi animasi vault biasa (walking vault)
+        if animId:find("126081405469607") or animName:find("walkingvault") then
+            -- Hentikan animasi vault biasa
+            pcall(function()
+                animationTrack:Stop(0)
+            end)
+
+            -- Mainkan fast vault
+            if fastVaultTrack then
+                pcall(function()
+                    fastVaultTrack:Play(0.02)
+                end)
             end
+
+            -- Set atribut sprint agar vault menjadi fast
+            pcall(function()
+                character:SetAttribute("Sprinting", true)
+                character:SetAttribute("IsRunning", true)
+                humanoid:SetAttribute("Sprinting", true)
+                humanoid:SetAttribute("IsRunning", true)
+            end)
         end
     end)
-end
 
--- Juga tangani ketika player menekan tombol vault di UI (mobile) - kita tidak bisa tahu, tapi kita bisa trigger dari input.
-
--- Inisialisasi
-setupInputHandler()
-setupHook()
-
--- Toggle GUI
-toggleButton.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    toggleButton.Text = enabled and "ON" or "OFF"
-    toggleButton.BackgroundColor3 = enabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 80)
-    statusLabel.Text = enabled and "✅ Fast Vault Active" or "Tap vault (E/Space) to fast vault"
-end)
-
--- Untuk mobile, tambahkan touch support
-toggleButton.TouchTap:Connect(function()
-    enabled = not enabled
-    toggleButton.Text = enabled and "ON" or "OFF"
-    toggleButton.BackgroundColor3 = enabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(60, 60, 80)
-    statusLabel.Text = enabled and "✅ Fast Vault Active" or "Tap vault (E/Space) to fast vault"
-end)
-
--- Cleanup saat di-unload
-local function cleanup()
-    if originalFireServer and hookActive then
-        pcall(function()
-            -- Tidak ada cara mudah untuk unhook, tapi kita bisa set enabled = false
-        end)
+    -- Simpan connection untuk cleanup
+    if not character:GetAttribute("FastVaultConnection") then
+        character:SetAttribute("FastVaultConnection", connection)
     end
-    screenGui:Destroy()
 end
 
--- Deteksi jika script di-unload (optional)
--- Tambahkan tombol unload? Bisa ditambahkan nanti.
+-- ============================================================================
+-- 5. HOOK KE CHARACTER
+-- ============================================================================
 
-print("Always Fast Vault loaded! Toggle from GUI.")
+local function onCharacterAdded(character)
+    task.wait(0.5) -- Tunggu humanoid & animator siap
+    setupFastVault(character)
+end
+
+local function cleanupCharacter(character)
+    local conn = character:GetAttribute("FastVaultConnection")
+    if conn then
+        pcall(function() conn:Disconnect() end)
+        character:SetAttribute("FastVaultConnection", nil)
+    end
+end
+
+-- Jika character sudah ada
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
+
+-- Ketika character baru spawn
+LocalPlayer.CharacterAdded:Connect(function(character)
+    if LocalPlayer.Character and LocalPlayer.Character ~= character then
+        cleanupCharacter(LocalPlayer.Character)
+    end
+    onCharacterAdded(character)
+end)
+
+print("[Fast Vault] Script loaded. Toggle UI to enable/disable.")
