@@ -639,7 +639,7 @@ Toggles.ServerHop = AutoFarmGroup:AddToggle({
     end,
 })
 
-local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
+local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/dev/loader.lua"
 local AutoExecuteQueued = false
 
 local function QueueAutoExec()
