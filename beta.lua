@@ -1,489 +1,602 @@
---[[
-    Always Fast Vault - Standalone Test Harness
-    Extracted/adapted from the provided 6locc.txt source.
-
-    Source-derived behavior:
-    1) Replace the walking-vault animation (126081405469607) with the fast-vault
-       animation (83873880822918).
-    2) Intercept VaultEvent FireServer/InvokeServer calls and change the second
-       boolean argument from false -> true.
-    3) When E or Space is pressed near a VaultTrigger/VaultPoint (<= 9 studs),
-       set sprint/running attributes, face the vault and push the root at 22
-       studs/s toward it.
-    4) Re-discover vault remotes after respawn and keep the feature toggleable.
-
-    Intended as a standalone test harness for the supplied source.
-]]
+--[=[ 
+    GUI for Network Desync Feature
+    Extracted from Violence District script
+    Mobile-friendly
+]=]
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-    return
-end
+local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or Instance.new("PlayerGui", LocalPlayer)
 
+-- Config defaults
 local Config = {
-    AlwaysFastVault = false,
+    Desync = false,
+    EnableDesyncGhost = false,
+    DesyncGhostAlwaysOnTop = true,
+    DesyncGhostTransparency = 0.5,
+    DesyncGhostColor = "Accent"
 }
 
-local Connections = {}
-local HookInstalled = false
+-- Color map
+local colorMap = {
+    Accent = Color3.fromRGB(255, 42, 109),
+    Cyan = Color3.fromRGB(0, 255, 255),
+    Purple = Color3.fromRGB(180, 50, 255),
+    Green = Color3.fromRGB(0, 255, 120),
+    Red = Color3.fromRGB(255, 60, 60),
+    Yellow = Color3.fromRGB(255, 220, 0),
+    White = Color3.fromRGB(255, 255, 255)
+}
 
-local FastVaultRemote
-local VaultCompleteRemote
-local VaultListenerConnection
-local CharacterAnimationConnection
+-- Ghost reference
+local ghostModel = nil
+local ghostHighlight = nil
+local isAnchored = false
+local lastCFrame = nil
 
-local function addConnection(connection)
-    if connection then
-        table.insert(Connections, connection)
-    end
-    return connection
-end
-
-local function disconnectAll()
-    for _, connection in ipairs(Connections) do
-        pcall(function()
-            connection:Disconnect()
-        end)
-    end
-    table.clear(Connections)
-
-    if VaultListenerConnection then
-        pcall(function()
-            VaultListenerConnection:Disconnect()
-        end)
-        VaultListenerConnection = nil
-    end
-
-    if CharacterAnimationConnection then
-        pcall(function()
-            CharacterAnimationConnection:Disconnect()
-        end)
-        CharacterAnimationConnection = nil
+-- Functions to control desync
+local function destroyGhost()
+    if ghostModel then
+        ghostModel:Destroy()
+        ghostModel = nil
+        ghostHighlight = nil
     end
 end
 
-local function findVaultRemotes()
-    FastVaultRemote = nil
-    VaultCompleteRemote = nil
-
-    local root = ReplicatedStorage:FindFirstChild("Remotes", true) or ReplicatedStorage
-
-    for _, instance in ipairs(root:GetDescendants()) do
-        if instance:IsA("RemoteEvent") then
-            local name = instance.Name:lower()
-
-            if name == "fastvault" then
-                FastVaultRemote = instance
-            elseif name == "vaultcompleteeventpart1" then
-                VaultCompleteRemote = instance
+local function createGhost(character)
+    if not character then return end
+    destroyGhost()
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local ghost = Instance.new("Model")
+    ghost.Name = "DesyncGhost"
+    
+    -- Clone visible parts
+    for _, part in ipairs(character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            local clone = part:Clone()
+            clone.Anchored = true
+            clone.CanCollide = false
+            clone.CastShadow = false
+            clone.Transparency = 0.99
+            clone.Material = Enum.Material.SmoothPlastic
+            clone.Parent = ghost
+            -- Store original part name
+            clone:SetAttribute("OriginalPartName", part.Name)
+        elseif part:IsA("Accessory") then
+            local handle = part:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                local clone = handle:Clone()
+                clone.Anchored = true
+                clone.CanCollide = false
+                clone.CastShadow = false
+                clone.Transparency = 0.99
+                clone.Material = Enum.Material.SmoothPlastic
+                clone:SetAttribute("OriginalPartName", handle.Name)
+                clone.Parent = ghost
             end
         end
     end
-end
-
-local function getVaultPoints()
-    local points = {}
-    local map = workspace:FindFirstChild("Map") or workspace
-
-    for _, instance in ipairs(map:GetDescendants()) do
-        if (instance.Name == "VaultTrigger" or instance.Name == "VaultPoint")
-            and instance:IsA("BasePart") then
-            table.insert(points, instance)
-        end
-    end
-
-    return points
-end
-
-local function getNearestVault(position, maxDistance)
-    local nearest
-    local nearestDistance = maxDistance or 9
-
-    for _, point in ipairs(getVaultPoints()) do
-        if point and point.Parent then
-            local distance = (position - point.Position).Magnitude
-            if distance < nearestDistance then
-                nearest = point
-                nearestDistance = distance
+    
+    -- Position ghost at current character position
+    local rootCF = rootPart.CFrame
+    for _, part in ipairs(ghost:GetChildren()) do
+        if part:IsA("BasePart") then
+            local origName = part:GetAttribute("OriginalPartName")
+            local origPart = character:FindFirstChild(origName, true)
+            if origPart and origPart:IsA("BasePart") then
+                local offset = rootCF:ToObjectSpace(origPart.CFrame)
+                part.CFrame = rootCF * offset
             end
         end
     end
-
-    return nearest
+    
+    -- Add highlight
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "GhostHighlight"
+    highlight.FillColor = colorMap[Config.DesyncGhostColor] or colorMap.Accent
+    highlight.FillTransparency = Config.DesyncGhostTransparency or 0.5
+    highlight.OutlineColor = Color3.fromRGB(255,255,255)
+    highlight.OutlineTransparency = 0.1
+    highlight.DepthMode = Config.DesyncGhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+    highlight.Adornee = ghost
+    highlight.Enabled = true
+    highlight.Parent = ghost
+    
+    ghost.Parent = workspace
+    ghostModel = ghost
+    ghostHighlight = highlight
 end
 
-local function setRunningState(character)
-    if not character then
-        return
+local function updateGhostAppearance()
+    if not ghostModel then return end
+    if ghostHighlight then
+        ghostHighlight.FillColor = colorMap[Config.DesyncGhostColor] or colorMap.Accent
+        ghostHighlight.FillTransparency = Config.DesyncGhostTransparency or 0.5
+        ghostHighlight.DepthMode = Config.DesyncGhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
     end
-
-    pcall(function()
-        character:SetAttribute("Sprinting", true)
-        character:SetAttribute("IsRunning", true)
-    end)
-end
-
-local function playFastVaultAnimation(character)
-    if not character then
-        return
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
-    if not animator then
-        return
-    end
-
-    local animation = Instance.new("Animation")
-    animation.AnimationId = "rbxassetid://83873880822918"
-
-    local ok, track = pcall(function()
-        return animator:LoadAnimation(animation)
-    end)
-
-    animation:Destroy()
-
-    if ok and track then
-        track.Priority = Enum.AnimationPriority.Action
-        track:Play(0.02)
-    end
-end
-
-local function watchCharacter(character)
-    if CharacterAnimationConnection then
-        pcall(function()
-            CharacterAnimationConnection:Disconnect()
-        end)
-        CharacterAnimationConnection = nil
-    end
-
-    if not character then
-        return
-    end
-
-    local humanoid = character:WaitForChild("Humanoid", 5)
-    local animator = humanoid and humanoid:WaitForChild("Animator", 5)
-    if not animator then
-        return
-    end
-
-    CharacterAnimationConnection = animator.AnimationPlayed:Connect(function(track)
-        if not Config.AlwaysFastVault then
-            return
-        end
-
-        local animationId = ""
-        pcall(function()
-            animationId = tostring(track.Animation and track.Animation.AnimationId or ""):lower()
-        end)
-
-        local trackName = tostring(track.Name or ""):lower()
-
-        if animationId:find("126081405469607", 1, true)
-            or trackName:find("walkingvault", 1, true) then
-
-            pcall(function()
-                track:Stop(0)
-            end)
-
-            playFastVaultAnimation(character)
-        end
-    end)
-
-    addConnection(CharacterAnimationConnection)
-end
-
-local function manualFastVault()
-    if not Config.AlwaysFastVault then
-        return
-    end
-
+    -- Update position of ghost parts to match character
     local character = LocalPlayer.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then
-        return
-    end
-
-    local vault = getNearestVault(root.Position, 9)
-    if not vault then
-        return
-    end
-
-    local delta = vault.Position - root.Position
-    local direction = Vector3.new(delta.X, 0, delta.Z)
-
-    if direction.Magnitude <= 0.05 then
-        local look = root.CFrame.LookVector
-        direction = Vector3.new(look.X, 0, look.Z)
-    end
-
-    if direction.Magnitude <= 0.05 then
-        return
-    end
-
-    direction = direction.Unit
-
-    local speed = root.AssemblyLinearVelocity.Magnitude
-    local facing = root.CFrame.LookVector:Dot(direction)
-    local alreadyFast = speed >= 13 and facing >= 0.7
-
-    if not alreadyFast then
-        setRunningState(character)
-
-        root.CFrame = CFrame.new(root.Position, root.Position + direction)
-        root.AssemblyLinearVelocity = direction * 22
-    end
-end
-
-local function installVaultHook()
-    if HookInstalled then
-        return
-    end
-
-    if typeof(hookmetamethod) ~= "function" or typeof(getnamecallmethod) ~= "function" then
-        return
-    end
-
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-
-        if Config.AlwaysFastVault
-            and (method == "FireServer" or method == "InvokeServer")
-            and typeof(self) == "Instance"
-            and self.Name == "VaultEvent"
-            and args[2] == false then
-
-            args[2] = true
-
-            local character = LocalPlayer.Character
-            if character then
-                setRunningState(character)
-            end
-
-            if FastVaultRemote and character then
-                pcall(function()
-                    FastVaultRemote:FireServer(character)
-                end)
-            end
-
-            if VaultCompleteRemote then
-                pcall(function()
-                    VaultCompleteRemote:FireServer()
-                end)
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local rootCF = rootPart.CFrame
+            for _, part in ipairs(ghostModel:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local origName = part:GetAttribute("OriginalPartName")
+                    local origPart = character:FindFirstChild(origName, true)
+                    if origPart and origPart:IsA("BasePart") then
+                        local offset = rootCF:ToObjectSpace(origPart.CFrame)
+                        part.CFrame = rootCF * offset
+                    end
+                end
             end
         end
-
-        return oldNamecall(self, table.unpack(args))
-    end))
-
-    HookInstalled = true
-end
-
-local function setEnabled(enabled)
-    Config.AlwaysFastVault = enabled
-
-    if enabled then
-        findVaultRemotes()
     end
 end
 
--- GUI ------------------------------------------------------------------------
+local function applyDesync()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    if Config.Desync then
+        -- Anchor character and store CFrame
+        if not isAnchored then
+            rootPart.Anchored = true
+            lastCFrame = rootPart.CFrame
+            isAnchored = true
+        end
+        -- Update CFrame based on movement (simulate)
+        -- In real script, this is handled in a loop
+        if Config.EnableDesyncGhost then
+            if not ghostModel then
+                createGhost(character)
+            else
+                updateGhostAppearance()
+            end
+        else
+            destroyGhost()
+        end
+    else
+        -- Unanchor
+        if isAnchored then
+            rootPart.Anchored = false
+            isAnchored = false
+        end
+        destroyGhost()
+    end
+end
 
-local guiParent = (gethui and gethui()) or LocalPlayer:WaitForChild("PlayerGui")
+-- Heartbeat loop for desync (simulate movement while anchored)
+local function desyncLoop()
+    if not Config.Desync then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    if isAnchored then
+        -- Move character based on MoveDirection (simulate)
+        local moveDir = humanoid.MoveDirection
+        if moveDir.Magnitude > 0 then
+            local speed = humanoid.WalkSpeed
+            local delta = RunService.Heartbeat:Wait() or 0.016
+            local newPos = rootPart.Position + moveDir * speed * delta
+            rootPart.CFrame = CFrame.new(newPos) * rootPart.CFrame.Rotation
+            lastCFrame = rootPart.CFrame
+        end
+    end
+end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AlwaysFastVaultTest"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = guiParent
+-- GUI Creation
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DesyncControlGUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = PlayerGui
 
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.fromOffset(280, 170)
-Main.Position = UDim2.new(0.5, -140, 0.5, -85)
-Main.BackgroundColor3 = Color3.fromRGB(18, 20, 27)
-Main.BorderSizePixel = 0
-Main.Active = true
-Main.Parent = ScreenGui
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 0)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
 
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 12)
-mainCorner.Parent = Main
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
 
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(55, 60, 75)
-stroke.Thickness = 1
-stroke.Parent = Main
+stroke.Color = Color3.fromRGB(255, 42, 109)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.3
+stroke.Parent = mainFrame
 
-local Title = Instance.new("TextLabel")
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.fromOffset(14, 10)
-Title.Size = UDim2.new(1, -28, 0, 24)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "Always Fast Vault"
-Title.TextColor3 = Color3.fromRGB(240, 242, 248)
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Main
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 36)
+title.Position = UDim2.new(0, 0, 0, 6)
+title.BackgroundTransparency = 1
+title.Text = "Network Desync"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.Parent = mainFrame
 
-local Subtitle = Instance.new("TextLabel")
-Subtitle.BackgroundTransparency = 1
-Subtitle.Position = UDim2.fromOffset(14, 34)
-Subtitle.Size = UDim2.new(1, -28, 0, 20)
-Subtitle.Font = Enum.Font.Gotham
-Subtitle.Text = "Standalone test harness"
-Subtitle.TextColor3 = Color3.fromRGB(150, 156, 170)
-Subtitle.TextSize = 11
-Subtitle.TextXAlignment = Enum.TextXAlignment.Left
-Subtitle.Parent = Main
-
-local Toggle = Instance.new("TextButton")
-Toggle.Name = "Toggle"
-Toggle.Position = UDim2.fromOffset(14, 66)
-Toggle.Size = UDim2.new(1, -28, 0, 42)
-Toggle.BackgroundColor3 = Color3.fromRGB(37, 40, 50)
-Toggle.BorderSizePixel = 0
-Toggle.AutoButtonColor = false
-Toggle.Font = Enum.Font.GothamBold
-Toggle.Text = "FAST VAULT: OFF"
-Toggle.TextColor3 = Color3.fromRGB(210, 214, 224)
-Toggle.TextSize = 13
-Toggle.Parent = Main
-
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 9)
-toggleCorner.Parent = Toggle
-
-local Status = Instance.new("TextLabel")
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.fromOffset(14, 116)
-Status.Size = UDim2.new(1, -28, 0, 18)
-Status.Font = Enum.Font.Gotham
-Status.Text = "Status: disabled"
-Status.TextColor3 = Color3.fromRGB(145, 150, 165)
-Status.TextSize = 11
-Status.TextXAlignment = Enum.TextXAlignment.Left
-Status.Parent = Main
-
-local Help = Instance.new("TextLabel")
-Help.BackgroundTransparency = 1
-Help.Position = UDim2.fromOffset(14, 137)
-Help.Size = UDim2.new(1, -28, 0, 18)
-Help.Font = Enum.Font.Gotham
-Help.Text = "PC: E / Space   •   Mobile: use the game vault button"
-Help.TextColor3 = Color3.fromRGB(120, 125, 140)
-Help.TextSize = 9.5
-Help.TextXAlignment = Enum.TextXAlignment.Left
-Help.Parent = Main
-
-local function refreshUI()
-    local enabled = Config.AlwaysFastVault
-
-    Toggle.Text = enabled and "FAST VAULT: ON" or "FAST VAULT: OFF"
-    Toggle.TextColor3 = enabled
-        and Color3.fromRGB(95, 255, 170)
-        or Color3.fromRGB(210, 214, 224)
-
-    Toggle.BackgroundColor3 = enabled
-        and Color3.fromRGB(24, 55, 43)
-        or Color3.fromRGB(37, 40, 50)
-
-    Status.Text = enabled
-        and "Status: monitoring vaults"
-        or "Status: disabled"
-end
-
-Toggle.MouseButton1Click:Connect(function()
-    setEnabled(not Config.AlwaysFastVault)
-    refreshUI()
+-- Close button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -36, 0, 8)
+closeBtn.BackgroundTransparency = 1
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.Parent = mainFrame
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
 end)
 
-addConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then
-        return
-    end
+-- Scroll container
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, 0, 1, -48)
+scrollFrame.Position = UDim2.new(0, 0, 0, 42)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 42, 109)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.Parent = mainFrame
 
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        Main.Visible = not Main.Visible
-        return
-    end
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = scrollFrame
 
-    if not Config.AlwaysFastVault then
-        return
-    end
+local padding = Instance.new("UIPadding")
+padding.PaddingLeft = UDim.new(0, 12)
+padding.PaddingRight = UDim.new(0, 12)
+padding.PaddingTop = UDim.new(0, 6)
+padding.PaddingBottom = UDim.new(0, 6)
+padding.Parent = scrollFrame
 
-    if input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.Space then
-        manualFastVault()
+-- Helper: create toggle row
+local function createToggle(labelText, configKey, defaultValue)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 44)
+    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    row.BackgroundTransparency = 0.3
+    row.BorderSizePixel = 0
+    row.Parent = scrollFrame
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 8)
+    rowCorner.Parent = row
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.65, -8, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(220, 220, 230)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 50, 0, 26)
+    toggleBtn.Position = UDim2.new(1, -58, 0.5, -13)
+    toggleBtn.BackgroundColor3 = defaultValue and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(60, 60, 80)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Text = ""
+    toggleBtn.AutoButtonColor = false
+    toggleBtn.Parent = row
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(1, 0)
+    toggleCorner.Parent = toggleBtn
+    
+    local thumb = Instance.new("Frame")
+    thumb.Size = UDim2.new(0, 20, 0, 20)
+    thumb.Position = defaultValue and UDim2.new(1, -24, 0.5, -10) or UDim2.new(0, 4, 0.5, -10)
+    thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    thumb.BorderSizePixel = 0
+    thumb.Parent = toggleBtn
+    local thumbCorner = Instance.new("UICorner")
+    thumbCorner.CornerRadius = UDim.new(1, 0)
+    thumbCorner.Parent = thumb
+    
+    local function setValue(val)
+        Config[configKey] = val
+        toggleBtn.BackgroundColor3 = val and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(60, 60, 80)
+        thumb.Position = val and UDim2.new(1, -24, 0.5, -10) or UDim2.new(0, 4, 0.5, -10)
+        -- Apply changes
+        if configKey == "Desync" then
+            applyDesync()
+            -- Start/stop loop
+            if val then
+                if not desyncConnection then
+                    desyncConnection = RunService.Heartbeat:Connect(desyncLoop)
+                end
+            else
+                if desyncConnection then
+                    desyncConnection:Disconnect()
+                    desyncConnection = nil
+                end
+                -- Unanchor
+                local char = LocalPlayer.Character
+                if char then
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if root then root.Anchored = false end
+                end
+                isAnchored = false
+                destroyGhost()
+            end
+        elseif configKey == "EnableDesyncGhost" then
+            if Config.Desync then
+                if val then
+                    local char = LocalPlayer.Character
+                    if char then createGhost(char) end
+                else
+                    destroyGhost()
+                end
+            end
+        elseif configKey == "DesyncGhostAlwaysOnTop" then
+            if ghostHighlight then
+                ghostHighlight.DepthMode = val and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+            end
+        end
     end
-end))
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        setValue(not Config[configKey])
+    end)
+    
+    -- set initial
+    Config[configKey] = defaultValue
+    setValue(defaultValue)
+    
+    return row
+end
 
--- Simple drag support; works with mouse and touch.
-do
+-- Helper: create slider
+local function createSlider(labelText, configKey, minVal, maxVal, defaultValue, suffix)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 60)
+    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    row.BackgroundTransparency = 0.3
+    row.BorderSizePixel = 0
+    row.Parent = scrollFrame
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 8)
+    rowCorner.Parent = row
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 0, 20)
+    label.Position = UDim2.new(0, 8, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(220, 220, 230)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+    
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0.25, 0, 0, 20)
+    valueLabel.Position = UDim2.new(0.72, 0, 0, 4)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(defaultValue) .. (suffix or "")
+    valueLabel.TextColor3 = Color3.fromRGB(255, 42, 109)
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 13
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = row
+    
+    local sliderTrack = Instance.new("Frame")
+    sliderTrack.Size = UDim2.new(1, -16, 0, 4)
+    sliderTrack.Position = UDim2.new(0, 8, 0, 34)
+    sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    sliderTrack.BorderSizePixel = 0
+    sliderTrack.Parent = row
+    local trackCorner = Instance.new("UICorner")
+    trackCorner.CornerRadius = UDim.new(1, 0)
+    trackCorner.Parent = sliderTrack
+    
+    local fill = Instance.new("Frame")
+    local ratio = (defaultValue - minVal) / (maxVal - minVal)
+    fill.Size = UDim2.new(ratio, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(255, 42, 109)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderTrack
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
+    
+    local thumb = Instance.new("TextButton")
+    thumb.Size = UDim2.new(0, 20, 0, 20)
+    thumb.Position = UDim2.new(ratio, -10, 0.5, -10)
+    thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    thumb.BorderSizePixel = 0
+    thumb.Text = ""
+    thumb.AutoButtonColor = false
+    thumb.Parent = sliderTrack
+    local thumbCorner = Instance.new("UICorner")
+    thumbCorner.CornerRadius = UDim.new(1, 0)
+    thumbCorner.Parent = thumb
+    
+    local function setValue(val)
+        val = math.clamp(val, minVal, maxVal)
+        Config[configKey] = val
+        valueLabel.Text = tostring(val) .. (suffix or "")
+        local newRatio = (val - minVal) / (maxVal - minVal)
+        fill.Size = UDim2.new(newRatio, 0, 1, 0)
+        thumb.Position = UDim2.new(newRatio, -10, 0.5, -10)
+        -- Apply
+        if configKey == "DesyncGhostTransparency" then
+            if ghostHighlight then
+                ghostHighlight.FillTransparency = val
+            end
+        end
+    end
+    
     local dragging = false
-    local dragStart
-    local startPos
-
-    addConnection(Main.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = Main.Position
+    thumb.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    thumb.MouseButton1Up:Connect(function()
+        dragging = false
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local trackSize = sliderTrack.AbsoluteSize.X
+            if trackSize > 0 then
+                local mouseX = input.Position.X - sliderTrack.AbsolutePosition.X
+                local newVal = minVal + (mouseX / trackSize) * (maxVal - minVal)
+                setValue(newVal)
+            end
         end
-    end))
-
-    addConnection(Main.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end))
-
-    addConnection(UserInputService.InputChanged:Connect(function(input)
-        if not dragging then
-            return
-        end
-
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement
-            and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
-        end
-
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end))
+    end)
+    
+    -- set initial
+    setValue(defaultValue)
+    
+    return row
 end
 
-addConnection(LocalPlayer.CharacterAdded:Connect(function(character)
-    task.defer(function()
-        watchCharacter(character)
-    end)
-end))
-
-findVaultRemotes()
-watchCharacter(LocalPlayer.Character)
-installVaultHook()
-refreshUI()
-
--- Cleanup helper for repeated execution.
-_G.AlwaysFastVaultTestCleanup = function()
-    Config.AlwaysFastVault = false
-    disconnectAll()
-
-    pcall(function()
-        ScreenGui:Destroy()
-    end)
+-- Helper: create color picker
+local function createColorPicker(labelText, configKey, defaultColor)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 44)
+    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    row.BackgroundTransparency = 0.3
+    row.BorderSizePixel = 0
+    row.Parent = scrollFrame
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 8)
+    rowCorner.Parent = row
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.5, 0, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(220, 220, 230)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+    
+    local colors = {"Accent", "Cyan", "Purple", "Green", "Red", "Yellow", "White"}
+    local btnContainer = Instance.new("Frame")
+    btnContainer.Size = UDim2.new(0.48, 0, 1, 0)
+    btnContainer.Position = UDim2.new(0.5, 0, 0, 0)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.Parent = row
+    
+    local flow = Instance.new("UIListLayout")
+    flow.FillDirection = Enum.FillDirection.Horizontal
+    flow.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    flow.VerticalAlignment = Enum.VerticalAlignment.Center
+    flow.Padding = UDim.new(0, 4)
+    flow.Parent = btnContainer
+    
+    local function updateColorButtons(selected)
+        for _, child in ipairs(btnContainer:GetChildren()) do
+            if child:IsA("TextButton") then
+                local isSelected = child.Name == selected
+                child.Size = isSelected and UDim2.new(0, 28, 0, 28) or UDim2.new(0, 22, 0, 22)
+                child.BackgroundTransparency = isSelected and 0 or 0.3
+                child.BorderSizePixel = isSelected and 2 or 0
+            end
+        end
+    end
+    
+    for _, colorName in ipairs(colors) do
+        local btn = Instance.new("TextButton")
+        btn.Name = colorName
+        btn.Size = UDim2.new(0, 22, 0, 22)
+        btn.BackgroundColor3 = colorMap[colorName] or Color3.fromRGB(255,255,255)
+        btn.BackgroundTransparency = 0.3
+        btn.BorderSizePixel = 0
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.Parent = btnContainer
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(1, 0)
+        btnCorner.Parent = btn
+        
+        btn.MouseButton1Click:Connect(function()
+            Config[configKey] = colorName
+            updateColorButtons(colorName)
+            if ghostHighlight then
+                ghostHighlight.FillColor = colorMap[colorName]
+            end
+        end)
+    end
+    
+    -- set initial
+    updateColorButtons(defaultColor)
+    Config[configKey] = defaultColor
+    
+    return row
 end
+
+-- Create controls
+createToggle("Enable Desync", "Desync", false)
+createToggle("Show Ghost", "EnableDesyncGhost", false)
+createToggle("Ghost Always On Top", "DesyncGhostAlwaysOnTop", true)
+createSlider("Ghost Transparency", "DesyncGhostTransparency", 0, 1, 0.5, "")
+createColorPicker("Ghost Color", "DesyncGhostColor", "Accent")
+
+-- Calculate height
+local function updateHeight()
+    local contentSize = listLayout.AbsoluteContentSize
+    mainFrame.Size = UDim2.new(0, 320, 0, math.min(contentSize.Y + 48, 420))
+end
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateHeight)
+task.wait(0.1)
+updateHeight()
+
+-- Desync loop connection
+local desyncConnection = nil
+
+-- Cleanup on gui destroy
+screenGui.AncestryChanged:Connect(function()
+    if not screenGui.Parent then
+        if desyncConnection then desyncConnection:Disconnect() end
+        -- Unanchor if needed
+        local char = LocalPlayer.Character
+        if char then
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root then root.Anchored = false end
+        end
+        destroyGhost()
+    end
+end)
+
+-- Handle character respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if Config.Desync then
+        applyDesync()
+        if Config.EnableDesyncGhost then
+            createGhost(char)
+        end
+    end
+end)
+
+print("Desync Control GUI loaded. Use the UI to test network desync features.")
