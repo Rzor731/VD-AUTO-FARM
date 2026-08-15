@@ -1,602 +1,784 @@
---[=[ 
-    GUI for Network Desync Feature
-    Extracted from Violence District script
-    Mobile-friendly
-]=]
+-- ================================================================
+-- VD AUTO FARM - MIGRASI KE MODERNV2 (ZILUX)
+-- Menggunakan library dari ziaanclient.vercel.app/zilux
+-- ================================================================
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or Instance.new("PlayerGui", LocalPlayer)
-
--- Config defaults
-local Config = {
-    Desync = false,
-    EnableDesyncGhost = false,
-    DesyncGhostAlwaysOnTop = true,
-    DesyncGhostTransparency = 0.5,
-    DesyncGhostColor = "Accent"
-}
-
--- Color map
-local colorMap = {
-    Accent = Color3.fromRGB(255, 42, 109),
-    Cyan = Color3.fromRGB(0, 255, 255),
-    Purple = Color3.fromRGB(180, 50, 255),
-    Green = Color3.fromRGB(0, 255, 120),
-    Red = Color3.fromRGB(255, 60, 60),
-    Yellow = Color3.fromRGB(255, 220, 0),
-    White = Color3.fromRGB(255, 255, 255)
-}
-
--- Ghost reference
-local ghostModel = nil
-local ghostHighlight = nil
-local isAnchored = false
-local lastCFrame = nil
-
--- Functions to control desync
-local function destroyGhost()
-    if ghostModel then
-        ghostModel:Destroy()
-        ghostModel = nil
-        ghostHighlight = nil
-    end
+-- Load ModernV2 Library
+local ModernV2 = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
+if not ModernV2 then
+    error("Gagal memuat ModernV2 library. Periksa URL atau koneksi.")
 end
 
-local function createGhost(character)
-    if not character then return end
-    destroyGhost()
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local ghost = Instance.new("Model")
-    ghost.Name = "DesyncGhost"
-    
-    -- Clone visible parts
-    for _, part in ipairs(character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            local clone = part:Clone()
-            clone.Anchored = true
-            clone.CanCollide = false
-            clone.CastShadow = false
-            clone.Transparency = 0.99
-            clone.Material = Enum.Material.SmoothPlastic
-            clone.Parent = ghost
-            -- Store original part name
-            clone:SetAttribute("OriginalPartName", part.Name)
-        elseif part:IsA("Accessory") then
-            local handle = part:FindFirstChild("Handle")
-            if handle and handle:IsA("BasePart") then
-                local clone = handle:Clone()
-                clone.Anchored = true
-                clone.CanCollide = false
-                clone.CastShadow = false
-                clone.Transparency = 0.99
-                clone.Material = Enum.Material.SmoothPlastic
-                clone:SetAttribute("OriginalPartName", handle.Name)
-                clone.Parent = ghost
-            end
-        end
-    end
-    
-    -- Position ghost at current character position
-    local rootCF = rootPart.CFrame
-    for _, part in ipairs(ghost:GetChildren()) do
-        if part:IsA("BasePart") then
-            local origName = part:GetAttribute("OriginalPartName")
-            local origPart = character:FindFirstChild(origName, true)
-            if origPart and origPart:IsA("BasePart") then
-                local offset = rootCF:ToObjectSpace(origPart.CFrame)
-                part.CFrame = rootCF * offset
-            end
-        end
-    end
-    
-    -- Add highlight
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "GhostHighlight"
-    highlight.FillColor = colorMap[Config.DesyncGhostColor] or colorMap.Accent
-    highlight.FillTransparency = Config.DesyncGhostTransparency or 0.5
-    highlight.OutlineColor = Color3.fromRGB(255,255,255)
-    highlight.OutlineTransparency = 0.1
-    highlight.DepthMode = Config.DesyncGhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-    highlight.Adornee = ghost
-    highlight.Enabled = true
-    highlight.Parent = ghost
-    
-    ghost.Parent = workspace
-    ghostModel = ghost
-    ghostHighlight = highlight
-end
-
-local function updateGhostAppearance()
-    if not ghostModel then return end
-    if ghostHighlight then
-        ghostHighlight.FillColor = colorMap[Config.DesyncGhostColor] or colorMap.Accent
-        ghostHighlight.FillTransparency = Config.DesyncGhostTransparency or 0.5
-        ghostHighlight.DepthMode = Config.DesyncGhostAlwaysOnTop and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-    end
-    -- Update position of ghost parts to match character
-    local character = LocalPlayer.Character
-    if character then
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            local rootCF = rootPart.CFrame
-            for _, part in ipairs(ghostModel:GetChildren()) do
-                if part:IsA("BasePart") then
-                    local origName = part:GetAttribute("OriginalPartName")
-                    local origPart = character:FindFirstChild(origName, true)
-                    if origPart and origPart:IsA("BasePart") then
-                        local offset = rootCF:ToObjectSpace(origPart.CFrame)
-                        part.CFrame = rootCF * offset
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function applyDesync()
-    local character = LocalPlayer.Character
-    if not character then return end
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    if Config.Desync then
-        -- Anchor character and store CFrame
-        if not isAnchored then
-            rootPart.Anchored = true
-            lastCFrame = rootPart.CFrame
-            isAnchored = true
-        end
-        -- Update CFrame based on movement (simulate)
-        -- In real script, this is handled in a loop
-        if Config.EnableDesyncGhost then
-            if not ghostModel then
-                createGhost(character)
-            else
-                updateGhostAppearance()
-            end
-        else
-            destroyGhost()
-        end
-    else
-        -- Unanchor
-        if isAnchored then
-            rootPart.Anchored = false
-            isAnchored = false
-        end
-        destroyGhost()
-    end
-end
-
--- Heartbeat loop for desync (simulate movement while anchored)
-local function desyncLoop()
-    if not Config.Desync then return end
-    local character = LocalPlayer.Character
-    if not character then return end
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-    
-    if isAnchored then
-        -- Move character based on MoveDirection (simulate)
-        local moveDir = humanoid.MoveDirection
-        if moveDir.Magnitude > 0 then
-            local speed = humanoid.WalkSpeed
-            local delta = RunService.Heartbeat:Wait() or 0.016
-            local newPos = rootPart.Position + moveDir * speed * delta
-            rootPart.CFrame = CFrame.new(newPos) * rootPart.CFrame.Rotation
-            lastCFrame = rootPart.CFrame
-        end
-    end
-end
-
--- GUI Creation
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DesyncControlGUI"
-screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent = PlayerGui
-
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 0)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-mainFrame.BackgroundTransparency = 0.15
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = screenGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = mainFrame
-
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(255, 42, 109)
-stroke.Thickness = 1.5
-stroke.Transparency = 0.3
-stroke.Parent = mainFrame
-
--- Title
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 36)
-title.Position = UDim2.new(0, 0, 0, 6)
-title.BackgroundTransparency = 1
-title.Text = "Network Desync"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.TextXAlignment = Enum.TextXAlignment.Center
-title.Parent = mainFrame
-
--- Close button
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -36, 0, 8)
-closeBtn.BackgroundTransparency = 1
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 16
-closeBtn.Parent = mainFrame
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
+pcall(function()
+    game:GetService("GuiService"):SetErrorPromptEnabled(false)
 end)
 
--- Scroll container
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, 0, 1, -48)
-scrollFrame.Position = UDim2.new(0, 0, 0, 42)
-scrollFrame.BackgroundTransparency = 1
-scrollFrame.BorderSizePixel = 0
-scrollFrame.ScrollBarThickness = 3
-scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 42, 109)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scrollFrame.Parent = mainFrame
+-- Service references
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 8)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = scrollFrame
+-- ================================================================
+-- 1. BUAT WINDOW
+-- ================================================================
+local Window = ModernV2:CreateWindow({
+    Name = "",                              -- Title (kosong)
+    Content = "version: 1.0.0",             -- Footer
+    Icon = "bot",
+    Size = ModernV2.Scales.Default,
+    Keybind = "RightShift",                 -- Toggle menu
+    ConfigFolder = "VD_AutoFarm_Configs",
+    TextGradient = true,
+})
 
-local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 12)
-padding.PaddingRight = UDim.new(0, 12)
-padding.PaddingTop = UDim.new(0, 6)
-padding.PaddingBottom = UDim.new(0, 6)
-padding.Parent = scrollFrame
+-- ================================================================
+-- 2. TABS
+-- ================================================================
+local Tabs = {
+    AutoFarm = Window:AddTab({ Name = "Auto Farm", Icon = "zap" }),
+    Settings = Window:AddTab({ Name = "Settings", Icon = "settings" }),
+}
 
--- Helper: create toggle row
-local function createToggle(labelText, configKey, defaultValue)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 44)
-    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-    row.BackgroundTransparency = 0.3
-    row.BorderSizePixel = 0
-    row.Parent = scrollFrame
-    local rowCorner = Instance.new("UICorner")
-    rowCorner.CornerRadius = UDim.new(0, 8)
-    rowCorner.Parent = row
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.65, -8, 1, 0)
-    label.Position = UDim2.new(0, 8, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = labelText
-    label.TextColor3 = Color3.fromRGB(220, 220, 230)
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = row
-    
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 50, 0, 26)
-    toggleBtn.Position = UDim2.new(1, -58, 0.5, -13)
-    toggleBtn.BackgroundColor3 = defaultValue and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(60, 60, 80)
-    toggleBtn.BorderSizePixel = 0
-    toggleBtn.Text = ""
-    toggleBtn.AutoButtonColor = false
-    toggleBtn.Parent = row
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(1, 0)
-    toggleCorner.Parent = toggleBtn
-    
-    local thumb = Instance.new("Frame")
-    thumb.Size = UDim2.new(0, 20, 0, 20)
-    thumb.Position = defaultValue and UDim2.new(1, -24, 0.5, -10) or UDim2.new(0, 4, 0.5, -10)
-    thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    thumb.BorderSizePixel = 0
-    thumb.Parent = toggleBtn
-    local thumbCorner = Instance.new("UICorner")
-    thumbCorner.CornerRadius = UDim.new(1, 0)
-    thumbCorner.Parent = thumb
-    
-    local function setValue(val)
-        Config[configKey] = val
-        toggleBtn.BackgroundColor3 = val and Color3.fromRGB(34, 197, 94) or Color3.fromRGB(60, 60, 80)
-        thumb.Position = val and UDim2.new(1, -24, 0.5, -10) or UDim2.new(0, 4, 0.5, -10)
-        -- Apply changes
-        if configKey == "Desync" then
-            applyDesync()
-            -- Start/stop loop
-            if val then
-                if not desyncConnection then
-                    desyncConnection = RunService.Heartbeat:Connect(desyncLoop)
-                end
-            else
-                if desyncConnection then
-                    desyncConnection:Disconnect()
-                    desyncConnection = nil
-                end
-                -- Unanchor
-                local char = LocalPlayer.Character
-                if char then
-                    local root = char:FindFirstChild("HumanoidRootPart")
-                    if root then root.Anchored = false end
-                end
-                isAnchored = false
-                destroyGhost()
-            end
-        elseif configKey == "EnableDesyncGhost" then
-            if Config.Desync then
-                if val then
-                    local char = LocalPlayer.Character
-                    if char then createGhost(char) end
-                else
-                    destroyGhost()
-                end
-            end
-        elseif configKey == "DesyncGhostAlwaysOnTop" then
-            if ghostHighlight then
-                ghostHighlight.DepthMode = val and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-            end
-        end
-    end
-    
-    toggleBtn.MouseButton1Click:Connect(function()
-        setValue(not Config[configKey])
-    end)
-    
-    -- set initial
-    Config[configKey] = defaultValue
-    setValue(defaultValue)
-    
-    return row
+-- ================================================================
+-- 3. SECTIONS (GROUPBOX)
+-- ================================================================
+local AutoFarmGroup = Tabs.AutoFarm:AddSection({
+    Name = "Auto Farm",
+    Position = "Left",
+    Icon = "zap",
+    Box = true,
+})
+
+local WebhookGroup = Tabs.AutoFarm:AddSection({
+    Name = "Webhook",
+    Position = "Right",
+    Icon = "webhook",
+    Box = true,
+})
+
+-- ================================================================
+-- 4. PENAMPUNG KOMPONEN
+-- ================================================================
+local Options = {}
+local Toggles = {}
+
+-- ================================================================
+-- 5. NOTIFIKASI
+-- ================================================================
+local LastNotifTime = 0
+local function Notify(title, desc, duration)
+    local now = os.clock()
+    if now - LastNotifTime < 2.5 then return end
+    LastNotifTime = now
+    Window:Notify({
+        Title = title,
+        Content = desc,
+        Duration = duration or 3,
+        Icon = "lucide:bell",
+    })
 end
 
--- Helper: create slider
-local function createSlider(labelText, configKey, minVal, maxVal, defaultValue, suffix)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 60)
-    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-    row.BackgroundTransparency = 0.3
-    row.BorderSizePixel = 0
-    row.Parent = scrollFrame
-    local rowCorner = Instance.new("UICorner")
-    rowCorner.CornerRadius = UDim.new(0, 8)
-    rowCorner.Parent = row
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.7, 0, 0, 20)
-    label.Position = UDim2.new(0, 8, 0, 4)
-    label.BackgroundTransparency = 1
-    label.Text = labelText
-    label.TextColor3 = Color3.fromRGB(220, 220, 230)
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = row
-    
-    local valueLabel = Instance.new("TextLabel")
-    valueLabel.Size = UDim2.new(0.25, 0, 0, 20)
-    valueLabel.Position = UDim2.new(0.72, 0, 0, 4)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Text = tostring(defaultValue) .. (suffix or "")
-    valueLabel.TextColor3 = Color3.fromRGB(255, 42, 109)
-    valueLabel.Font = Enum.Font.GothamBold
-    valueLabel.TextSize = 13
-    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    valueLabel.Parent = row
-    
-    local sliderTrack = Instance.new("Frame")
-    sliderTrack.Size = UDim2.new(1, -16, 0, 4)
-    sliderTrack.Position = UDim2.new(0, 8, 0, 34)
-    sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-    sliderTrack.BorderSizePixel = 0
-    sliderTrack.Parent = row
-    local trackCorner = Instance.new("UICorner")
-    trackCorner.CornerRadius = UDim.new(1, 0)
-    trackCorner.Parent = sliderTrack
-    
-    local fill = Instance.new("Frame")
-    local ratio = (defaultValue - minVal) / (maxVal - minVal)
-    fill.Size = UDim2.new(ratio, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(255, 42, 109)
-    fill.BorderSizePixel = 0
-    fill.Parent = sliderTrack
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(1, 0)
-    fillCorner.Parent = fill
-    
-    local thumb = Instance.new("TextButton")
-    thumb.Size = UDim2.new(0, 20, 0, 20)
-    thumb.Position = UDim2.new(ratio, -10, 0.5, -10)
-    thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    thumb.BorderSizePixel = 0
-    thumb.Text = ""
-    thumb.AutoButtonColor = false
-    thumb.Parent = sliderTrack
-    local thumbCorner = Instance.new("UICorner")
-    thumbCorner.CornerRadius = UDim.new(1, 0)
-    thumbCorner.Parent = thumb
-    
-    local function setValue(val)
-        val = math.clamp(val, minVal, maxVal)
-        Config[configKey] = val
-        valueLabel.Text = tostring(val) .. (suffix or "")
-        local newRatio = (val - minVal) / (maxVal - minVal)
-        fill.Size = UDim2.new(newRatio, 0, 1, 0)
-        thumb.Position = UDim2.new(newRatio, -10, 0.5, -10)
-        -- Apply
-        if configKey == "DesyncGhostTransparency" then
-            if ghostHighlight then
-                ghostHighlight.FillTransparency = val
-            end
-        end
-    end
-    
-    local dragging = false
-    thumb.MouseButton1Down:Connect(function()
-        dragging = true
-    end)
-    thumb.MouseButton1Up:Connect(function()
-        dragging = false
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local trackSize = sliderTrack.AbsoluteSize.X
-            if trackSize > 0 then
-                local mouseX = input.Position.X - sliderTrack.AbsolutePosition.X
-                local newVal = minVal + (mouseX / trackSize) * (maxVal - minVal)
-                setValue(newVal)
-            end
-        end
-    end)
-    
-    -- set initial
-    setValue(defaultValue)
-    
-    return row
+-- ================================================================
+-- 6. FUNGSI UTAMA (sama persis dengan script asli)
+-- ================================================================
+local function GetRole()
+    local team = LocalPlayer.Team
+    if not team then return "Unknown" end
+    local n = team.Name
+    if n == "Killer" then return "Killer"
+    elseif n == "Survivors" then return "Survivor"
+    elseif n == "Spectator" or n == "Spectators" then return "Spectator" end
+    return "Lobby"
 end
 
--- Helper: create color picker
-local function createColorPicker(labelText, configKey, defaultColor)
-    local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 44)
-    row.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-    row.BackgroundTransparency = 0.3
-    row.BorderSizePixel = 0
-    row.Parent = scrollFrame
-    local rowCorner = Instance.new("UICorner")
-    rowCorner.CornerRadius = UDim.new(0, 8)
-    rowCorner.Parent = row
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.5, 0, 1, 0)
-    label.Position = UDim2.new(0, 8, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = labelText
-    label.TextColor3 = Color3.fromRGB(220, 220, 230)
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = row
-    
-    local colors = {"Accent", "Cyan", "Purple", "Green", "Red", "Yellow", "White"}
-    local btnContainer = Instance.new("Frame")
-    btnContainer.Size = UDim2.new(0.48, 0, 1, 0)
-    btnContainer.Position = UDim2.new(0.5, 0, 0, 0)
-    btnContainer.BackgroundTransparency = 1
-    btnContainer.Parent = row
-    
-    local flow = Instance.new("UIListLayout")
-    flow.FillDirection = Enum.FillDirection.Horizontal
-    flow.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    flow.VerticalAlignment = Enum.VerticalAlignment.Center
-    flow.Padding = UDim.new(0, 4)
-    flow.Parent = btnContainer
-    
-    local function updateColorButtons(selected)
-        for _, child in ipairs(btnContainer:GetChildren()) do
-            if child:IsA("TextButton") then
-                local isSelected = child.Name == selected
-                child.Size = isSelected and UDim2.new(0, 28, 0, 28) or UDim2.new(0, 22, 0, 22)
-                child.BackgroundTransparency = isSelected and 0 or 0.3
-                child.BorderSizePixel = isSelected and 2 or 0
+local function GetRoot()
+    local c = LocalPlayer.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function SafeReq(opts)
+    local fn = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request) or (krnl and krnl.request)
+    return fn and fn(opts)
+end
+
+local function ExecutorName()
+    return (identifyexecutor and identifyexecutor()) or (getexecutorname and getexecutorname()) or "Unknown Executor"
+end
+
+-- ================================================================
+-- 7. WEBHOOK & SNAPSHOT
+-- ================================================================
+local ATTR_FILE = "VD_AutoFarm_Attributes.json"
+local PrevAttrs
+
+local function LoadSnapshot()
+    if not isfile or not readfile or not isfile(ATTR_FILE) then return nil end
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(readfile(ATTR_FILE))
+    end)
+    if not ok or type(data) ~= "table" or tonumber(data.UserId) ~= LocalPlayer.UserId then return nil end
+    return {
+        KillerChance = tonumber(data.KillerChance),
+        EXP = tonumber(data.EXP),
+        Screws = tonumber(data.Screws),
+        Gears = tonumber(data.Gears),
+    }
+end
+
+local function SaveSnapshot(attrs)
+    if not writefile then return false end
+    local data = {
+        UserId = LocalPlayer.UserId,
+        KillerChance = attrs.KillerChance,
+        EXP = attrs.EXP,
+        Screws = attrs.Screws,
+        Gears = attrs.Gears,
+        UpdatedAt = os.time(),
+    }
+    return pcall(function()
+        writefile(ATTR_FILE, HttpService:JSONEncode(data))
+    end)
+end
+
+local function Delta(cur, prev)
+    cur = tonumber(cur) or 0
+    if prev == nil then return 0 end
+    return cur - (tonumber(prev) or 0)
+end
+
+PrevAttrs = LoadSnapshot()
+
+local function WebhookEnabled()
+    return Toggles.EnableWebhook and Toggles.EnableWebhook:GetValue()
+end
+
+local function WebhookUrl()
+    return Options.WebhookLink and Options.WebhookLink:GetValue() or ""
+end
+
+local function ValidWebhook(url)
+    return url ~= "" and string.find(url, "discord.com/api/webhooks")
+end
+
+local function SendDebug(title, desc)
+    if not WebhookEnabled() then return false end
+    local url = WebhookUrl()
+    if not ValidWebhook(url) then return false end
+    local payload = {
+        embeds = {
+            {
+                title = title,
+                description = desc,
+                color = 16711680,
+                footer = { text = "ServerHop Debug" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+            }
+        }
+    }
+    local res = SafeReq({
+        Url = url,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode(payload),
+    })
+    return res and (res.StatusCode == 200 or res.StatusCode == 204)
+end
+
+local function SendWebhook(title, desc, force)
+    if not force and not WebhookEnabled() then return false, "Disabled" end
+    local url = WebhookUrl()
+    if not ValidWebhook(url) then return false, "Invalid URL" end
+    local attrs = LocalPlayer:GetAttributes()
+    local kc = tonumber(attrs.KillerChance) or 0
+    local exp = tonumber(attrs.EXP) or 0
+    local screws = tonumber(attrs.Screws) or 0
+    local gears = tonumber(attrs.Gears) or 0
+    local lvl = tonumber(attrs.Level) or 0
+    if not PrevAttrs then
+        PrevAttrs = { KillerChance = kc, EXP = exp, Screws = screws, Gears = gears }
+    end
+    local payload = {
+        embeds = {
+            {
+                title = title or string.format("%s · Level %d", LocalPlayer.DisplayName, lvl),
+                url = string.format("https://www.roblox.com/users/%d/profile", LocalPlayer.UserId),
+                description = desc,
+                color = 3638942,
+                fields = {
+                    { name = "💀 SIN", value = string.format("%s (**%+d**)", kc, Delta(kc, PrevAttrs.KillerChance)), inline = false },
+                    { name = "🧪 EXP", value = string.format("%s (**%+d**)", exp, Delta(exp, PrevAttrs.EXP)), inline = false },
+                    { name = "🔩 Screws", value = string.format("%s (**%+d**)", screws, Delta(screws, PrevAttrs.Screws)), inline = false },
+                    { name = "⚙️ Gears", value = string.format("%s (**%+d**)", gears, Delta(gears, PrevAttrs.Gears)), inline = false },
+                    { name = "🆔 Server ID", value = string.format("```\n%s\n```", game.JobId ~= "" and game.JobId or "Singleplayer"), inline = false },
+                },
+                footer = { text = string.format("VD Auto Farm · %s", ExecutorName()) },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+            }
+        }
+    }
+    local res = SafeReq({
+        Url = url,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode(payload),
+    })
+    if res and (res.StatusCode == 200 or res.StatusCode == 204) then
+        PrevAttrs = { KillerChance = kc, EXP = exp, Screws = screws, Gears = gears }
+        SaveSnapshot(PrevAttrs)
+        return true, "OK"
+    end
+    return false, "Status: " .. tostring(res and res.StatusCode or "No Response")
+end
+
+-- ================================================================
+-- 8. BEAT GAME (AUTO FARM)
+-- ================================================================
+local BeatState = {
+    LastFinishPos = nil,
+    BeatSurvivorDone = false,
+    LastRole = nil,
+}
+local FinishWatchActive = false
+local ForceServerHop = false
+
+local function FindFinish(map)
+    local pos
+    pcall(function()
+        if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
+            pos = Vector3.new(3098.16, 454.04, -4918.74)
+            return
+        end
+        if map:FindFirstChild("HooksMeat") then
+            pos = Vector3.new(1546.12, 152.21, -796.72)
+            return
+        end
+        if map:FindFirstChild("churchbell") then
+            pos = Vector3.new(760.98, -20.14, -78.48)
+            return
+        end
+        local finish = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
+        if finish then
+            if finish:IsA("BasePart") then
+                pos = finish.Position
+            elseif finish:IsA("Model") then
+                local p = finish:FindFirstChildWhichIsA("BasePart")
+                if p then pos = p.Position end
+            end
+            return
+        end
+        for _, obj in ipairs(map:GetDescendants()) do
+            if obj.Name:lower():find("finish") then
+                if obj:IsA("BasePart") then pos = obj.Position break
+                elseif obj:IsA("Model") then
+                    local p = obj:FindFirstChildWhichIsA("BasePart")
+                    if p then pos = p.Position break end
+                end
             end
         end
-    end
-    
-    for _, colorName in ipairs(colors) do
-        local btn = Instance.new("TextButton")
-        btn.Name = colorName
-        btn.Size = UDim2.new(0, 22, 0, 22)
-        btn.BackgroundColor3 = colorMap[colorName] or Color3.fromRGB(255,255,255)
-        btn.BackgroundTransparency = 0.3
-        btn.BorderSizePixel = 0
-        btn.Text = ""
-        btn.AutoButtonColor = false
-        btn.Parent = btnContainer
-        local btnCorner = Instance.new("UICorner")
-        btnCorner.CornerRadius = UDim.new(1, 0)
-        btnCorner.Parent = btn
-        
-        btn.MouseButton1Click:Connect(function()
-            Config[configKey] = colorName
-            updateColorButtons(colorName)
-            if ghostHighlight then
-                ghostHighlight.FillColor = colorMap[colorName]
+        if pos then return end
+        for _, obj in ipairs(map:GetDescendants()) do
+            if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
+                pos = Vector3.new(-947.90, 152.12, -7579.52)
+                break
             end
+        end
+        if pos then return end
+        for _, obj in ipairs(map:GetDescendants()) do
+            if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
+                pos = Vector3.new(1546.12, 152.21, -796.72)
+                break
+            end
+        end
+    end)
+    return pos
+end
+
+local function BeatGame()
+    if not Toggles.EnableAutoFarm:GetValue() then
+        BeatState.BeatSurvivorDone = false
+        BeatState.LastFinishPos = nil
+        return
+    end
+    local role = GetRole()
+    if BeatState.LastRole ~= role then
+        if role == "Survivor" then
+            Notify("🟢 Survivor!", "Ready to farm.")
+        end
+        BeatState.LastRole = role
+    end
+    if role ~= "Survivor" then return end
+    local root = GetRoot()
+    if not root then
+        Notify("⏳ Waiting", "Character not loaded")
+        return
+    end
+    local map = Workspace:FindFirstChild("Map")
+    if not map then
+        Notify("⚠️ No Map", "Waiting for map")
+        return
+    end
+    local exitPos = FindFinish(map)
+    if not exitPos then
+        Notify("⚠️ Finish Not Found", "Map unsupported")
+        return
+    end
+    if BeatState.LastFinishPos and (exitPos - BeatState.LastFinishPos).Magnitude > 50 then
+        BeatState.BeatSurvivorDone = false
+    end
+    if BeatState.BeatSurvivorDone then return end
+    Notify("📍 Finish Found", "Waiting 6s...")
+    task.wait(6)
+    if not Toggles.EnableAutoFarm:GetValue() then
+        Notify("⛔ Cancelled", "Toggle turned off")
+        return
+    end
+    if GetRole() ~= "Survivor" then
+        Notify("⛔ Cancelled", "Not Survivor anymore")
+        return
+    end
+    local currentRoot = GetRoot()
+    if not currentRoot then
+        Notify("⛔ Cancelled", "Character missing")
+        return
+    end
+    Notify("🚀 Teleporting", "Moving to finish...")
+    currentRoot.CFrame = CFrame.new(exitPos)
+    BeatState.BeatSurvivorDone = true
+    BeatState.LastFinishPos = exitPos
+    Notify("✅ Teleport Success", "Round completed!")
+    if not FinishWatchActive then
+        FinishWatchActive = true
+        task.spawn(function()
+            local start = os.clock()
+            local timeout = 10
+            while os.clock() - start < timeout do
+                if not Toggles.EnableAutoFarm:GetValue() then
+                    FinishWatchActive = false
+                    return
+                end
+                if GetRole() == "Spectator" then
+                    FinishWatchActive = false
+                    Notify("👁️ Match Completed", "Role changed to Spectator.")
+                    return
+                end
+                task.wait(0.5)
+            end
+            if GetRole() == "Survivor" then
+                Notify("🔴 Match Stuck", "Still Survivor after finish. Server hopping...")
+                pcall(function()
+                    SendDebug("🔴 Match Stuck", string.format("Role remained `%s` after %ds.\nServer: `%s`", tostring(GetRole()), timeout, tostring(game.JobId)))
+                end)
+                if Toggles.ServerHop and Toggles.ServerHop:GetValue() then
+                    ForceServerHop = true
+                end
+            end
+            FinishWatchActive = false
         end)
     end
-    
-    -- set initial
-    updateColorButtons(defaultColor)
-    Config[configKey] = defaultColor
-    
-    return row
+    task.wait(5)
+    SendWebhook()
 end
 
--- Create controls
-createToggle("Enable Desync", "Desync", false)
-createToggle("Show Ghost", "EnableDesyncGhost", false)
-createToggle("Ghost Always On Top", "DesyncGhostAlwaysOnTop", true)
-createSlider("Ghost Transparency", "DesyncGhostTransparency", 0, 1, 0.5, "")
-createColorPicker("Ghost Color", "DesyncGhostColor", "Accent")
+-- ================================================================
+-- 9. SERVER HOP
+-- ================================================================
+local IGNORE_FILE = "ServerHop.txt"
+local IGNORE_CANDIDATE = 180
+local IGNORE_FAILED = 600
+local API_RETRY = 3
+local PAGE_WAIT = 0.5
+local NO_SERVER_WAIT = 3
+local TELEPORT_TIMEOUT = 7
+local TELEPORT_RETRY_WAIT = 2.5
 
--- Calculate height
-local function updateHeight()
-    local contentSize = listLayout.AbsoluteContentSize
-    mainFrame.Size = UDim2.new(0, 320, 0, math.min(contentSize.Y + 48, 420))
-end
-listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateHeight)
-task.wait(0.1)
-updateHeight()
+local IgnoredServers = {}
+local TargetServer = nil
+local OriginalJob = nil
+local TeleportInProgress = false
+local TeleportFailed = false
+local IsHopping = false
 
--- Desync loop connection
-local desyncConnection = nil
-
--- Cleanup on gui destroy
-screenGui.AncestryChanged:Connect(function()
-    if not screenGui.Parent then
-        if desyncConnection then desyncConnection:Disconnect() end
-        -- Unanchor if needed
-        local char = LocalPlayer.Character
-        if char then
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root then root.Anchored = false end
+local function LoadIgnored()
+    if not isfile or not readfile or not isfile(IGNORE_FILE) then return {} end
+    local ok, content = pcall(readfile, IGNORE_FILE)
+    if not ok then return {} end
+    local now = os.time()
+    local list = {}
+    for _, line in ipairs(content:split("\n")) do
+        local id, exp = line:match("^([^|]+)|(%d+)$")
+        exp = tonumber(exp)
+        if id and id ~= "" and exp and now < exp then
+            list[id] = exp
         end
-        destroyGhost()
+    end
+    return list
+end
+
+local function SaveIgnored(list)
+    if not writefile then return end
+    local now = os.time()
+    local lines = {}
+    for id, exp in pairs(list) do
+        if id and exp and now < exp then
+            table.insert(lines, id .. "|" .. exp)
+        end
+    end
+    pcall(function()
+        writefile(IGNORE_FILE, table.concat(lines, "\n"))
+    end)
+end
+
+local function AddIgnored(id, duration)
+    if not id then return end
+    IgnoredServers[id] = os.time() + duration
+    SaveIgnored(IgnoredServers)
+end
+
+local function IsIgnored(id)
+    local exp = IgnoredServers[id]
+    if not exp then return false end
+    if os.time() >= exp then
+        IgnoredServers[id] = nil
+        SaveIgnored(IgnoredServers)
+        return false
+    end
+    return true
+end
+
+local IsRound = false
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local StatusEvent = Remotes:WaitForChild("StatusUpdateEvent")
+local TimeEvent = Remotes:WaitForChild("TimeUpdateEvent")
+
+StatusEvent.OnClientEvent:Connect(function(s)
+    if s == "WaitingForPlayers" or s == "IntermissionStarting" or s == "Intermission" then
+        IsRound = false
+        BeatState.BeatSurvivorDone = false
+    end
+end)
+TimeEvent.OnClientEvent:Connect(function(s)
+    if s == "Round" then
+        IsRound = true
     end
 end)
 
--- Handle character respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    if Config.Desync then
-        applyDesync()
-        if Config.EnableDesyncGhost then
-            createGhost(char)
-        end
+local function CanHop()
+    if not IsRound then return false end
+    local r = GetRole()
+    return r == "Spectator" or r == "Killer"
+end
+
+local function ResetTeleportState()
+    TargetServer = nil
+    OriginalJob = nil
+    TeleportInProgress = false
+    TeleportFailed = false
+end
+
+local function BeginTeleport(id)
+    TargetServer = id
+    OriginalJob = game.JobId
+    TeleportInProgress = true
+    TeleportFailed = false
+end
+
+TeleportService.TeleportInitFailed:Connect(function(player, result, err)
+    if player ~= LocalPlayer or not TeleportInProgress then return end
+    local id = TargetServer
+    TeleportFailed = true
+    if id then
+        AddIgnored(id, IGNORE_FAILED)
+        Notify("❌ Teleport Failed", string.format("Server %s blacklisted 10m", id:sub(1, 8)))
+        pcall(function()
+            SendDebug("🐛 Teleport Failed", string.format("Server: `%s`\nCode: `%s`\nError: `%s`", id, tostring(result), tostring(err)))
+        end)
     end
 end)
 
-print("Desync Control GUI loaded. Use the UI to test network desync features.")
+local function DoTeleport(id)
+    BeginTeleport(id)
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
+    end)
+    if not ok then
+        TeleportInProgress = false
+        AddIgnored(id, IGNORE_FAILED)
+        Notify("❌ Teleport Error", "Call failed, retrying later")
+        pcall(function()
+            SendDebug("🐛 Teleport Call Failed", string.format("Server: `%s`\nError: `%s`", id, tostring(err)))
+        end)
+        ResetTeleportState()
+        return false
+    end
+    return true
+end
+
+local function WaitTeleport()
+    local start = os.clock()
+    while TeleportInProgress and not TeleportFailed and os.clock() - start < TELEPORT_TIMEOUT do
+        if game.JobId ~= OriginalJob then
+            return "Success"
+        end
+        task.wait(0.1)
+    end
+    if TeleportFailed then return "Failed" end
+    if game.JobId ~= OriginalJob then return "Success" end
+    return "Timeout"
+end
+
+local function ServerHop()
+    if IsHopping then return end
+    IsHopping = true
+    IgnoredServers = LoadIgnored()
+    ResetTeleportState()
+    local cursor = ""
+    local apiFails = 0
+    while Toggles.ServerHop and Toggles.ServerHop:GetValue() and not Window.Destroyed do
+        local forced = ForceServerHop
+        ForceServerHop = false
+        if not forced and not CanHop() then
+            ResetTeleportState()
+            task.wait(0.5)
+            goto continue
+        end
+        local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?limit=100&sortOrder=Asc&excludeFullGames=true&cursor=%s", game.PlaceId, HttpService:UrlEncode(cursor))
+        local ok, res = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+        if not ok or not res or type(res.data) ~= "table" then
+            apiFails = apiFails + 1
+            if apiFails >= 5 then
+                cursor = ""
+                apiFails = 0
+                pcall(function()
+                    SendDebug("API Error", "Reset pagination after 5 failures")
+                end)
+            end
+            task.wait(API_RETRY)
+            goto continue
+        end
+        apiFails = 0
+        local curJob = game.JobId
+        local found = false
+        for _, srv in ipairs(res.data) do
+            if not Toggles.ServerHop:GetValue() or Window.Destroyed then break end
+            if not forced and not CanHop() then break end
+            if srv.id and srv.id ~= curJob and srv.playing == 2 and not IsIgnored(srv.id) then
+                found = true
+                local id = srv.id
+                local count = srv.playing
+                AddIgnored(id, IGNORE_CANDIDATE)
+                Notify("📡 Teleporting", string.format("%d player | %s", count, id:sub(1, 8)))
+                task.wait(2)
+                if not DoTeleport(id) then
+                    task.wait(TELEPORT_RETRY_WAIT)
+                    goto continue
+                end
+                local result = WaitTeleport()
+                if result == "Success" then
+                    ResetTeleportState()
+                    IsHopping = false
+                    return
+                elseif result == "Failed" then
+                    ResetTeleportState()
+                    task.wait(TELEPORT_RETRY_WAIT)
+                    goto continue
+                else
+                    local failId = TargetServer
+                    if failId then
+                        AddIgnored(failId, IGNORE_FAILED)
+                        pcall(function()
+                            SendDebug("🐛 Teleport Timeout", string.format("Server %s no response in %ds", failId, TELEPORT_TIMEOUT))
+                        end)
+                    end
+                    Notify("⚠️ Timeout", "Server didn't respond, trying next")
+                    ResetTeleportState()
+                    task.wait(TELEPORT_RETRY_WAIT)
+                end
+            end
+        end
+        if not found then
+            local nextCursor = res.nextPageCursor or ""
+            if nextCursor ~= "" then
+                cursor = nextCursor
+                task.wait(PAGE_WAIT)
+            else
+                cursor = ""
+                Notify("⚠️ Server Hop", "No 1-3 player server available")
+                task.wait(NO_SERVER_WAIT)
+            end
+        end
+        ::continue::
+    end
+    ResetTeleportState()
+    IsHopping = false
+end
+
+-- ================================================================
+-- 10. KOMPONEN UI
+-- ================================================================
+
+-- AutoFarm Group
+Toggles.EnableAutoFarm = AutoFarmGroup:AddToggle({
+    Name = "Enable Auto Farm",
+    Flag = "EnableAutoFarm",
+    Default = false,
+})
+
+Toggles.ServerHop = AutoFarmGroup:AddToggle({
+    Name = "Server Hop",
+    Flag = "ServerHop",
+    Default = false,
+    Callback = function(v)
+        if v then
+            task.spawn(ServerHop)
+        end
+    end,
+})
+
+local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
+local AutoExecuteQueued = false
+
+local function QueueAutoExec()
+    if AutoExecuteQueued or not Toggles.AutoExecute:GetValue() then return end
+    if type(queue_on_teleport) ~= "function" then
+        Notify("Auto Execute", "queue_on_teleport not available", 5)
+        return
+    end
+    local code = string.format([[loadstring(game:HttpGet(%q))()]], LOADER_URL)
+    local ok, err = pcall(function()
+        queue_on_teleport(code)
+    end)
+    if ok then
+        AutoExecuteQueued = true
+        Notify("Auto Execute", "Queued for next teleport")
+    else
+        Notify("Auto Execute", "Failed: " .. tostring(err), 5)
+    end
+end
+
+Toggles.AutoExecute = AutoFarmGroup:AddToggle({
+    Name = "Auto Execute",
+    Flag = "AutoExecute",
+    Default = false,
+    Callback = function(v)
+        if v then
+            QueueAutoExec()
+        else
+            AutoExecuteQueued = false
+        end
+    end,
+})
+
+-- Webhook Group
+Toggles.EnableWebhook = WebhookGroup:AddToggle({
+    Name = "Enable Webhook",
+    Flag = "EnableWebhook",
+    Default = false,
+})
+
+Options.WebhookLink = WebhookGroup:AddTextInput({
+    Name = "Webhook Link",
+    Flag = "WebhookLink",
+    Default = "",
+    Placeholder = "Enter webhook URL...",
+})
+
+WebhookGroup:AddButton({
+    Name = "Test Webhook",
+    Callback = function()
+        local ok, msg = SendWebhook("🔔 Webhook Test", "Test from VD Auto Farm!", true)
+        if ok then
+            Notify("Webhook Success", "Test message sent!")
+        else
+            Notify("Webhook Failed", msg, 5)
+        end
+    end,
+})
+
+-- ================================================================
+-- 11. SETTINGS TAB
+-- ================================================================
+local MenuGroup = Tabs.Settings:AddSection({
+    Name = "Menu",
+    Position = "Left",
+    Icon = "wrench",
+    Box = true,
+})
+
+-- Corner Radius (mengakses UICorner langsung)
+MenuGroup:AddSlider({
+    Name = "Corner Radius",
+    Flag = "UICornerSlider",
+    Default = 10,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
+    Callback = function(v)
+        local corner = Window.Root:FindFirstChildWhichIsA("UICorner")
+        if corner then
+            corner.CornerRadius = UDim.new(0, v)
+        end
+    end,
+})
+
+MenuGroup:AddDivider()
+
+MenuGroup:AddLabel({ Text = "Menu bind" })
+
+Options.MenuKeybind = MenuGroup:AddKeybind({
+    Name = "Menu Keybind",
+    Flag = "MenuKeybind",
+    Default = "RightShift",
+    Mode = "Toggle",
+    Callback = function(state)
+        if state then
+            Window:ToggleInterface()
+        end
+    end,
+})
+
+MenuGroup:AddButton({
+    Name = "Unload",
+    Callback = function()
+        Window:Destroy()
+    end,
+})
+
+-- ================================================================
+-- 12. THEME & CONFIG
+-- ================================================================
+ModernV2:AddTheme({
+    Name = "Default",
+    Accent = Color3.fromRGB(78, 127, 252),
+    Background = Color3.fromRGB(8, 8, 13),
+    Surface = Color3.fromRGB(20, 22, 27),
+    Outline = Color3.fromRGB(45, 48, 58),
+    Text = Color3.fromRGB(255, 255, 255),
+    Placeholder = Color3.fromRGB(140, 140, 155),
+    Button = Color3.fromRGB(78, 127, 252),
+    Icon = Color3.fromRGB(255, 255, 255),
+})
+
+-- Config otomatis via flag system, tidak perlu konfigurasi tambahan.
+QueueAutoExec()
+
+-- ================================================================
+-- 13. LOOP UTAMA
+-- ================================================================
+task.spawn(function()
+    while not Window.Destroyed do
+        pcall(BeatGame)
+        task.wait(1)
+    end
+end)
+
+-- Tampilkan window
+Window.Signal:SetValue(true)
+
+-- ================================================================
+-- SELESAI
+-- ================================================================
