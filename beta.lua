@@ -4,7 +4,7 @@
 -- ================================================================
 
 -- Load ModernV2 (pastikan URL benar)
-local ModernV2 = loadstring(game:HttpGet("https://raw.githubusercontent.com/nhfudzfsrzggt/brigida/main/zilux.lua"))()
+local ModernV2 = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
 
 -- Service references
 local Players = game:GetService("Players")
