@@ -1,348 +1,793 @@
--- ============================================================
---  Contoh Script Menggunakan ModernV2 Library
---  Loader: https://ziaanclient.vercel.app/zilux
--- ============================================================
-
--- 1. LOAD LIBRARY
-local Library = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
-
--- 2. BUAT WINDOW UTAMA
-local Window = Library:Window({
-    Name = "My Awesome Script",          -- Judul window
-    Content = "ModernV2 Example",        -- Sub-judul
-    Size = Library.Scales.Large,         -- Ukuran window (Large, Default, Mobile, dll)
-    Logo = "rbxassetid://120358385035996", -- Logo (bisa URL atau asset ID)
-    Keybind = "RightControl",            -- Tombol untuk toggle window
-    ConfigFolder = "MyScriptConfigs",    -- Folder untuk menyimpan config
-    TextGradient = true,                 -- Efek gradien pada teks
-    NotifyOnCallbackError = true,        -- Notifikasi jika callback error
-})
-
--- 3. TAMBAHKAN TAB "HOME" (dengan dashboard otomatis)
-local HomeTab = Window:CreateHomeTab({
-    Name = "Dashboard",
-    Icon = "lucide:layout-dashboard",
-    Title = "Dashboard",
-    Content = "Welcome to the script!",
-    DiscordInvite = "yourdiscordinvite", -- Kosongkan jika tidak ada
-    SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare"}, -- Daftar executor yang didukung
-    UnsupportedExecutors = {},           -- Daftar executor tidak didukung
-    Changelog = {
-        { Title = "v1.0", Description = "Initial release" },
-        { Title = "v1.1", Description = "Added new features" },
-    },
-    AutoSetup = true,                    -- Buat dashboard otomatis
-})
-
--- 4. TAMBAHKAN TAB KUSTOM
-local SettingsTab = Window:AddTab({
-    Name = "Settings",
-    Icon = "lucide:settings",
-    Type = "Double",                     -- Layout dua kolom
-})
-
--- 4a. Section di kiri
-local LeftSection = SettingsTab:AddSection({
-    Name = "General Settings",
-    Position = "left",                   -- atau "right" / "center"
-    Icon = "lucide:sliders-horizontal",
-    Collapsible = true,                 -- Bisa dilipat
-})
-
--- Toggle
-LeftSection:AddToggle({
-    Name = "Enable Feature",
-    Default = false,
-    Flag = "featureToggle",              -- Untuk config
-    Callback = function(val)
-        print("Feature toggled:", val)
-        Window:Notify({
-            Title = "Feature",
-            Content = val and "Enabled" or "Disabled",
-            Duration = 2,
-            Icon = "lucide:check",
-        })
-    end,
-})
-
--- Slider
-LeftSection:AddSlider({
-    Name = "Speed",
-    Min = 0,
-    Max = 100,
-    Default = 50,
-    Type = "%",
-    Flag = "speedSlider",
-    Callback = function(val)
-        print("Speed set to:", val)
-    end,
-})
-
--- Dropdown
-LeftSection:AddDropdown({
-    Name = "Mode",
-    Values = {"Easy", "Normal", "Hard"},
-    Default = "Normal",
-    Flag = "modeDropdown",
-    Callback = function(val)
-        print("Mode changed to:", val)
-    end,
-})
-
--- Keybind
-LeftSection:AddKeybind({
-    Name = "Toggle Key",
-    Default = "F",
-    Mode = "Toggle",                     -- atau "Hold"
-    Flag = "toggleKey",
-    Callback = function(state)
-        print("Key pressed, state:", state)
-    end,
-})
-
--- 4b. Section di kanan
-local RightSection = SettingsTab:AddSection({
-    Name = "Appearance",
-    Position = "right",
-    Icon = "lucide:paint-brush",
-})
-
--- Color Picker
-RightSection:AddColorPicker({
-    Name = "Accent Color",
-    Default = Color3.fromRGB(78, 127, 252),
-    Flag = "accentColor",
-    Callback = function(color)
-        print("Color changed to:", color)
-        -- Update accent color global (opsional)
-        Library.AccentColor = color
-    end,
-})
-
--- Text Input
-RightSection:AddTextInput({
-    Name = "Custom Message",
-    Default = "Hello!",
-    Placeholder = "Type your message",
-    Flag = "messageInput",
-    Callback = function(text)
-        print("Message:", text)
-    end,
-})
-
--- Button
-RightSection:AddButton({
-    Name = "Show Message",
-    Icon = "lucide:message-circle",
-    Callback = function()
-        local msg = Library.Flags["messageInput"] and Library.Flags["messageInput"]:GetValue() or "Hello!"
-        Window:Notify({
-            Title = "Message",
-            Content = msg,
-            Duration = 3,
-            Icon = "lucide:message-circle",
-        })
-    end,
-})
-
--- 5. TAMBAHKAN TAB "ABOUT"
-local AboutTab = Window:AddTab({
-    Name = "About",
-    Icon = "lucide:info",
-    Type = "Single",                     -- Satu kolom penuh
-})
-
-local AboutSection = AboutTab:AddSection({
-    Name = "About This Script",
-    Position = "center",
-    Icon = "lucide:info",
-})
-
-AboutSection:AddParagraph({
-    Name = "ModernV2 Library",
-    Content = "This is an example script using the ModernV2 UI library.\n\n" ..
-              "Features demonstrated:\n" ..
-              "- Window with tabs and sections\n" ..
-              "- Toggle, Slider, Dropdown, Keybind, ColorPicker, TextInput, Button\n" ..
-              "- Config system with auto-save\n" ..
-              "- Notifications and logging\n" ..
-              "- Dependency boxes\n" ..
-              "- Home dashboard with stats\n\n" ..
-              "Library version: 0.3.3",
-})
-
-AboutSection:AddButton({
-    Name = "Unload Script",
-    Icon = "lucide:power",
-    Callback = function()
-        Window:Dialog({
-            Title = "Unload?",
-            Content = "Are you sure you want to unload the script?",
-            Buttons = {
-                { Text = "Cancel", ReturnValue = false },
-                { Text = "Unload", Primary = true, ReturnValue = true },
-            },
-            Callback = function(result)
-                if result then
-                    -- Unload library (jika didukung)
-                    Library.UnloadEnabled = true
-                    Library:Unload()
-                    -- Hapus window
-                    Window:Destroy()
-                end
-            end,
-        })
-    end,
-})
-
--- 6. DEMONSTRASI DEPENDENCY BOX
--- Buat toggle yang mengontrol dependency
-local depToggle = LeftSection:AddToggle({
-    Name = "Enable Advanced Options",
-    Default = false,
-    Flag = "advancedMode",
-})
-
--- Section yang tergantung pada depToggle
-local depSection = SettingsTab:AddSection({
-    Name = "Advanced Options",
-    Position = "left",
-    Icon = "lucide:code",
-})
-
--- Dependency box: hanya muncul jika advancedMode = true
-local depBox = depSection:AddDependencyBox({
-    Name = "Dependency Example",
-    Dependencies = {
-        { Flag = "advancedMode", Value = true },  -- Hanya muncul jika true
-    },
-    Mode = "Visible",   -- atau "Locked" untuk mengunci bukan menyembunyikan
-})
-
-depBox:AddLabel("This appears when Advanced Mode is ON"):AddSlider({
-    Name = "Advanced Slider",
-    Min = 0,
-    Max = 10,
-    Default = 5,
-})
-
--- 7. WATERMARK (di pojok kanan atas)
-local Watermark = Window:Watermark()
-local block1 = Watermark:AddBlock("lucide:user", "Player: " .. game.Players.LocalPlayer.Name)
-local block2 = Watermark:AddBlock("lucide:clock", "Runtime: 0s")
-
--- Update watermark setiap detik
-local runtime = 0
-game:GetService("RunService").Heartbeat:Connect(function(dt)
-    runtime = runtime + dt
-    if runtime >= 1 then
-        runtime = 0
-        local hours = math.floor(runtime / 3600)
-        local minutes = math.floor((runtime % 3600) / 60)
-        local seconds = math.floor(runtime % 60)
-        block2:SetText(string.format("Runtime: %02d:%02d:%02d", hours, minutes, seconds))
-    end
+pcall(function()
+	game:GetService("GuiService"):SetErrorPromptEnabled(false)
 end)
 
--- 8. LOGGING DEMO
-Library.Logging.new("lucide:info", "Script loaded successfully!", 3)
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
--- 9. NOTIFIKASI AWAL
-Window:Notify({
-    Title = "Welcome!",
-    Content = "This is a notification example.",
-    Duration = 4,
-    Icon = "lucide:smile",
+-- [ TABEL STATE UNTUK MENJAGA LOGIKA BACKEND TETAP BERJALAN ] --
+local Toggles = {
+	EnableAutoFarm = { Value = false },
+	ServerHop = { Value = false },
+	AutoExecute = { Value = false },
+	EnableWebhook = { Value = false }
+}
+local Options = {
+	WebhookLink = { Value = "" }
+}
+local UI_Unloaded = false
+
+-- [ INISIALISASI MODERN V2 ] --
+-- Catatan: Pastikan Anda mengganti link loadstring di bawah dengan link loader ModernV2 (ZiaanHub) milik Anda jika berbeda.
+local ModernV2 = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
+
+local Window = ModernV2:CreateWindow({
+	Title = "VD Auto Farm",
+	Subtitle = "version: 1.0.0",
+	Icon = "Bot",
+	Theme = "Dark"
 })
 
--- 10. MENU ICON (di pojok kiri tengah)
-local MenuIcon = Library:CreateMenuIcon({
-    Image = "lucide:menu",       -- Bisa pakai icon atau gambar
-    Size = 48,
-    IconColor = Color3.fromRGB(255,255,255),
-    BGColor = Color3.fromRGB(20,22,27),
-    StrokeColor = Library.AccentColor,
-    Draggable = true,
-})
+local TabAutoFarm = Window:CreateTab("Auto Farm", "Zap")
+local TabSettings = Window:CreateTab("Settings", "Settings")
 
--- Kaitkan dengan window agar icon bereaksi saat window toggle
-Window:AttachMenuIcon(MenuIcon)
+-- [ BACKEND LOGIC: JANGAN DIUBAH ] --
+local BeatState = {
+	LastFinishPos = nil,
+	BeatSurvivorDone = false,
+	LastRole = nil,
+}
+local FinishWatchActive = false
+local ForceServerHop = false
+local LastNotifTime = 0
+local ServerHop
 
--- Tampilkan icon
-MenuIcon:SetVisible(true)
+local function Notify(title, desc, duration)
+	local now = os.clock()
+	if now - LastNotifTime < 2.5 then
+		return
+	end
+	LastNotifTime = now
+	
+	-- Disesuaikan ke notifikasi ModernV2
+	if ModernV2 and ModernV2.Notify then
+		ModernV2:Notify({
+			Title = title,
+			Content = desc,
+			Duration = duration or 3
+		})
+	end
+end
 
--- 11. INDIKATOR (di samping kiri)
-local Indicator = Window:Indicator({
-    Name = "Online",
-    Icon = "lucide:circle-check",
-    Color = "Green",   -- atau "Red", "White"
-})
-Indicator:SetRender(true)
+local function GetRole()
+	local team = LocalPlayer.Team
+	if not team then
+		return "Unknown"
+	end
+	local n = team.Name
+	if n == "Killer" then
+		return "Killer"
+	elseif n == "Survivors" then
+		return "Survivor"
+	elseif n == "Spectator" or n == "Spectators" then
+		return "Spectator"
+	end
+	return "Lobby"
+end
 
--- Contoh: ubah warna menjadi merah setelah 5 detik
-task.delay(5, function()
-    Indicator:SetColor("Red")
-    Indicator:SetText("Warning")
+local function GetRoot()
+	local c = LocalPlayer.Character
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function SafeReq(opts)
+	local fn = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request) or (krnl and krnl.request)
+	return fn and fn(opts)
+end
+
+local function ExecutorName()
+	return (identifyexecutor and identifyexecutor()) or (getexecutorname and getexecutorname()) or "Unknown Executor"
+end
+
+local ATTR_FILE = "VD_AutoFarm_Attributes.json"
+local PrevAttrs
+
+local function LoadSnapshot()
+	if not isfile or not readfile or not isfile(ATTR_FILE) then
+		return nil
+	end
+	local ok, data = pcall(function()
+		return HttpService:JSONDecode(readfile(ATTR_FILE))
+	end)
+	if not ok or type(data) ~= "table" or tonumber(data.UserId) ~= LocalPlayer.UserId then
+		return nil
+	end
+	return {
+		KillerChance = tonumber(data.KillerChance),
+		EXP = tonumber(data.EXP),
+		Screws = tonumber(data.Screws),
+		Gears = tonumber(data.Gears),
+	}
+end
+
+local function SaveSnapshot(attrs)
+	if not writefile then
+		return false
+	end
+	local data = {
+		UserId = LocalPlayer.UserId,
+		KillerChance = attrs.KillerChance,
+		EXP = attrs.EXP,
+		Screws = attrs.Screws,
+		Gears = attrs.Gears,
+		UpdatedAt = os.time(),
+	}
+	return pcall(function()
+		writefile(ATTR_FILE, HttpService:JSONEncode(data))
+	end)
+end
+
+local function Delta(cur, prev)
+	cur = tonumber(cur) or 0
+	if prev == nil then
+		return 0
+	end
+	return cur - (tonumber(prev) or 0)
+end
+
+PrevAttrs = LoadSnapshot()
+
+local function WebhookEnabled()
+	return Toggles.EnableWebhook.Value
+end
+
+local function WebhookUrl()
+	return Options.WebhookLink.Value or ""
+end
+
+local function ValidWebhook(url)
+	return url ~= "" and string.find(url, "discord.com/api/webhooks")
+end
+
+local function SendDebug(title, desc)
+	if not WebhookEnabled() then
+		return false
+	end
+	local url = WebhookUrl()
+	if not ValidWebhook(url) then
+		return false
+	end
+	local payload = {
+		embeds = {
+			{
+				title = title,
+				description = desc,
+				color = 16711680,
+				footer = {
+					text = "ServerHop Debug",
+				},
+				timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+			},
+		},
+	}
+	local res = SafeReq({
+		Url = url,
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json",
+		},
+		Body = HttpService:JSONEncode(payload),
+	})
+	return res and (res.StatusCode == 200 or res.StatusCode == 204)
+end
+
+local function SendWebhook(title, desc, force)
+	if not force and not WebhookEnabled() then
+		return false, "Disabled"
+	end
+	local url = WebhookUrl()
+	if not ValidWebhook(url) then
+		return false, "Invalid URL"
+	end
+	local attrs = LocalPlayer:GetAttributes()
+	local kc = tonumber(attrs.KillerChance) or 0
+	local exp = tonumber(attrs.EXP) or 0
+	local screws = tonumber(attrs.Screws) or 0
+	local gears = tonumber(attrs.Gears) or 0
+	local lvl = tonumber(attrs.Level) or 0
+	if not PrevAttrs then
+		PrevAttrs = {
+			KillerChance = kc,
+			EXP = exp,
+			Screws = screws,
+			Gears = gears,
+		}
+	end
+	local payload = {
+		embeds = {
+			{
+				title = title or string.format("%s · Level %d", LocalPlayer.DisplayName, lvl),
+				url = string.format("https://www.roblox.com/users/%d/profile", LocalPlayer.UserId),
+				description = desc,
+				color = 3638942,
+				fields = {
+					{
+						name = "💀 SIN",
+						value = string.format("%s (**%+d**)", kc, Delta(kc, PrevAttrs.KillerChance)),
+						inline = false,
+					},
+					{
+						name = "🧪 EXP",
+						value = string.format("%s (**%+d**)", exp, Delta(exp, PrevAttrs.EXP)),
+						inline = false,
+					},
+					{
+						name = "🔩 Screws",
+						value = string.format("%s (**%+d**)", screws, Delta(screws, PrevAttrs.Screws)),
+						inline = false,
+					},
+					{
+						name = "⚙️ Gears",
+						value = string.format("%s (**%+d**)", gears, Delta(gears, PrevAttrs.Gears)),
+						inline = false,
+					},
+					{
+						name = "🆔 Server ID",
+						value = string.format("```\n%s\n```", game.JobId ~= "" and game.JobId or "Singleplayer"),
+						inline = false,
+					},
+				},
+				footer = {
+					text = string.format("VD Auto Farm · %s", ExecutorName()),
+				},
+				timestamp = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+			},
+		},
+	}
+	local res = SafeReq({
+		Url = url,
+		Method = "POST",
+		Headers = {
+			["Content-Type"] = "application/json",
+		},
+		Body = HttpService:JSONEncode(payload),
+	})
+	if res and (res.StatusCode == 200 or res.StatusCode == 204) then
+		PrevAttrs = {
+			KillerChance = kc,
+			EXP = exp,
+			Screws = screws,
+			Gears = gears,
+		}
+		SaveSnapshot(PrevAttrs)
+		return true, "OK"
+	end
+	return false, "Status: " .. tostring(res and res.StatusCode or "No Response")
+end
+
+local function FindFinish(map)
+	local pos
+	pcall(function()
+		if map:FindFirstChild("RooftopHitbox") or map:FindFirstChild("Rooftop") then
+			pos = Vector3.new(3098.16, 454.04, - 4918.74)
+			return
+		end
+		if map:FindFirstChild("HooksMeat") then
+			pos = Vector3.new(1546.12, 152.21, - 796.72)
+			return
+		end
+		if map:FindFirstChild("churchbell") then
+			pos = Vector3.new(760.98, - 20.14, - 78.48)
+			return
+		end
+		local finish = map:FindFirstChild("Finishline") or map:FindFirstChild("FinishLine") or map:FindFirstChild("Fininshline")
+		if finish then
+			if finish:IsA("BasePart") then
+				pos = finish.Position
+			elseif finish:IsA("Model") then
+				local p = finish:FindFirstChildWhichIsA("BasePart")
+				if p then
+					pos = p.Position
+				end
+			end
+			return
+		end
+		for _, obj in ipairs(map:GetDescendants()) do
+			if obj.Name:lower():find("finish") then
+				if obj:IsA("BasePart") then
+					pos = obj.Position
+					break
+				elseif obj:IsA("Model") then
+					local p = obj:FindFirstChildWhichIsA("BasePart")
+					if p then
+						pos = p.Position
+						break
+					end
+				end
+			end
+		end
+		if pos then
+			return
+		end
+		for _, obj in ipairs(map:GetDescendants()) do
+			if obj:IsA("MeshPart") and obj.Material == Enum.Material.Limestone then
+				pos = Vector3.new(- 947.90, 152.12, - 7579.52)
+				break
+			end
+		end
+		if pos then
+			return
+		end
+		for _, obj in ipairs(map:GetDescendants()) do
+			if obj:IsA("MeshPart") and obj.Material == Enum.Material.Leather then
+				pos = Vector3.new(1546.12, 152.21, - 796.72)
+				break
+			end
+		end
+	end)
+	return pos
+end
+
+local function BeatGame()
+	if not Toggles.EnableAutoFarm.Value then
+		BeatState.BeatSurvivorDone = false
+		BeatState.LastFinishPos = nil
+		return
+	end
+	local role = GetRole()
+	if BeatState.LastRole ~= role then
+		if role == "Survivor" then
+			Notify("🟢 Survivor!", "Ready to farm.")
+		end
+		BeatState.LastRole = role
+	end
+	if role ~= "Survivor" then
+		return
+	end
+	local root = GetRoot()
+	if not root then
+		Notify("⏳ Waiting", "Character not loaded")
+		return
+	end
+	local map = Workspace:FindFirstChild("Map")
+	if not map then
+		Notify("⚠️ No Map", "Waiting for map")
+		return
+	end
+	local exitPos = FindFinish(map)
+	if not exitPos then
+		Notify("⚠️ Finish Not Found", "Map unsupported")
+		return
+	end
+	if BeatState.LastFinishPos and (exitPos - BeatState.LastFinishPos).Magnitude > 50 then
+		BeatState.BeatSurvivorDone = false
+	end
+	if BeatState.BeatSurvivorDone then
+		return
+	end
+	Notify("📍 Finish Found", "Waiting 6s...")
+	task.wait(6)
+	if not Toggles.EnableAutoFarm.Value then
+		Notify("⛔ Cancelled", "Toggle turned off")
+		return
+	end
+	if GetRole() ~= "Survivor" then
+		Notify("⛔ Cancelled", "Not Survivor anymore")
+		return
+	end
+	local currentRoot = GetRoot()
+	if not currentRoot then
+		Notify("⛔ Cancelled", "Character missing")
+		return
+	end
+	Notify("🚀 Teleporting", "Moving to finish...")
+	currentRoot.CFrame = CFrame.new(exitPos)
+	BeatState.BeatSurvivorDone = true
+	BeatState.LastFinishPos = exitPos
+	Notify("✅ Teleport Success", "Round completed!")
+	if not FinishWatchActive then
+		FinishWatchActive = true
+		task.spawn(function()
+			local start = os.clock()
+			local timeout = 10
+			while os.clock() - start < timeout do
+				if not Toggles.EnableAutoFarm.Value then
+					FinishWatchActive = false
+					return
+				end
+				if GetRole() == "Spectator" then
+					FinishWatchActive = false
+					Notify("👁️ Match Completed", "Role changed to Spectator.")
+					return
+				end
+				task.wait(0.5)
+			end
+			if GetRole() == "Survivor" then
+				Notify("🔴 Match Stuck", "Still Survivor after finish. Server hopping...")
+				pcall(function()
+					SendDebug("🔴 Match Stuck", string.format("Role remained `%s` after %ds.\nServer: `%s`", tostring(GetRole()), timeout, tostring(game.JobId)))
+				end)
+				if Toggles.ServerHop and Toggles.ServerHop.Value then
+					ForceServerHop = true
+				end
+			end
+			FinishWatchActive = false
+		end)
+	end
+	task.wait(5)
+	SendWebhook()
+end
+
+local IGNORE_FILE = "ServerHop.txt"
+local IGNORE_CANDIDATE = 180
+local IGNORE_FAILED = 600
+local API_RETRY = 3
+local PAGE_WAIT = 0.5
+local NO_SERVER_WAIT = 3
+local TELEPORT_TIMEOUT = 7
+local TELEPORT_RETRY_WAIT = 2.5
+local IgnoredServers = {}
+local TargetServer = nil
+local OriginalJob = nil
+local TeleportInProgress = false
+local TeleportFailed = false
+local IsHopping = false
+
+local function LoadIgnored()
+	if not isfile or not readfile or not isfile(IGNORE_FILE) then
+		return {}
+	end
+	local ok, content = pcall(readfile, IGNORE_FILE)
+	if not ok then
+		return {}
+	end
+	local now = os.time()
+	local list = {}
+	for _, line in ipairs(content:split("\n")) do
+		local id, exp = line:match("^([^|]+)|(%d+)$")
+		exp = tonumber(exp)
+		if id and id ~= "" and exp and now < exp then
+			list[id] = exp
+		end
+	end
+	return list
+end
+
+local function SaveIgnored(list)
+	if not writefile then
+		return
+	end
+	local now = os.time()
+	local lines = {}
+	for id, exp in pairs(list) do
+		if id and exp and now < exp then
+			table.insert(lines, id .. "|" .. exp)
+		end
+	end
+	pcall(function()
+		writefile(IGNORE_FILE, table.concat(lines, "\n"))
+	end)
+end
+
+local function AddIgnored(id, duration)
+	if not id then
+		return
+	end
+	IgnoredServers[id] = os.time() + duration
+	SaveIgnored(IgnoredServers)
+end
+
+local function IsIgnored(id)
+	local exp = IgnoredServers[id]
+	if not exp then
+		return false
+	end
+	if os.time() >= exp then
+		IgnoredServers[id] = nil
+		SaveIgnored(IgnoredServers)
+		return false
+	end
+	return true
+end
+
+local IsRound = false
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local StatusEvent = Remotes:WaitForChild("StatusUpdateEvent")
+local TimeEvent = Remotes:WaitForChild("TimeUpdateEvent")
+
+StatusEvent.OnClientEvent:Connect(function(s)
+	if s == "WaitingForPlayers" or s == "IntermissionStarting" or s == "Intermission" then
+		IsRound = false
+		BeatState.BeatSurvivorDone = false
+	end
+end)
+TimeEvent.OnClientEvent:Connect(function(s)
+	if s == "Round" then
+		IsRound = true
+	end
 end)
 
--- 12. SISTEM CONFIG OTOMATIS
--- Config akan otomatis tersimpan dan dimuat jika ConfigEnabled true
--- Kita bisa menyimpan config secara manual:
--- Window:SaveConfig("MyConfig")   -- simpan dengan nama
--- Window:LoadConfig("MyConfig")   -- muat config
+local function CanHop()
+	if not IsRound then
+		return false
+	end
+	local r = GetRole()
+	return r == "Spectator" or r == "Killer"
+end
 
--- 13. DEMO: Dialog dan Input Dialog
--- Contoh tombol untuk memunculkan dialog
-local demoSection = AboutTab:AddSection({
-    Name = "Dialogs",
-    Position = "center",
+local function ResetTeleportState()
+	TargetServer = nil
+	OriginalJob = nil
+	TeleportInProgress = false
+	TeleportFailed = false
+end
+
+local function BeginTeleport(id)
+	TargetServer = id
+	OriginalJob = game.JobId
+	TeleportInProgress = true
+	TeleportFailed = false
+end
+
+TeleportService.TeleportInitFailed:Connect(function(player, result, err)
+	if player ~= LocalPlayer or not TeleportInProgress then
+		return
+	end
+	local id = TargetServer
+	TeleportFailed = true
+	if id then
+		AddIgnored(id, IGNORE_FAILED)
+		Notify("❌ Teleport Failed", string.format("Server %s blacklisted 10m", id:sub(1, 8)))
+		pcall(function()
+			SendDebug("🐛 Teleport Failed", string.format("Server: `%s`\nCode: `%s`\nError: `%s`", id, tostring(result), tostring(err)))
+		end)
+	end
+end)
+
+local function DoTeleport(id)
+	BeginTeleport(id)
+	local ok, err = pcall(function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
+	end)
+	if not ok then
+		TeleportInProgress = false
+		AddIgnored(id, IGNORE_FAILED)
+		Notify("❌ Teleport Error", "Call failed, retrying later")
+		pcall(function()
+			SendDebug("🐛 Teleport Call Failed", string.format("Server: `%s`\nError: `%s`", id, tostring(err)))
+		end)
+		ResetTeleportState()
+		return false
+	end
+	return true
+end
+
+local function WaitTeleport()
+	local start = os.clock()
+	while TeleportInProgress and not TeleportFailed and os.clock() - start < TELEPORT_TIMEOUT do
+		if game.JobId ~= OriginalJob then
+			return "Success"
+		end
+		task.wait(0.1)
+	end
+	if TeleportFailed then
+		return "Failed"
+	end
+	if game.JobId ~= OriginalJob then
+		return "Success"
+	end
+	return "Timeout"
+end
+
+ServerHop = function()
+	if IsHopping then
+		return
+	end
+	IsHopping = true
+	IgnoredServers = LoadIgnored()
+	ResetTeleportState()
+	local cursor = ""
+	local apiFails = 0
+	
+	-- Loop diganti dari Library.Unloaded ke UI_Unloaded
+	while Toggles.ServerHop and Toggles.ServerHop.Value and not UI_Unloaded do
+		local forced = ForceServerHop
+		ForceServerHop = false
+		if not forced and not CanHop() then
+			ResetTeleportState()
+			task.wait(0.5)
+			continue
+		end
+		local url = string.format("https://games.roblox.com/v1/games/%s/servers/Public?limit=100&sortOrder=Asc&excludeFullGames=true&cursor=%s", game.PlaceId, HttpService:UrlEncode(cursor))
+		local ok, res = pcall(function()
+			return HttpService:JSONDecode(game:HttpGet(url))
+		end)
+		if not ok or not res or type(res.data) ~= "table" then
+			apiFails = apiFails + 1
+			if apiFails >= 5 then
+				cursor = ""
+				apiFails = 0
+				pcall(function()
+					SendDebug("API Error", "Reset pagination after 5 failures")
+				end)
+			end
+			task.wait(API_RETRY)
+			continue
+		end
+		apiFails = 0
+		local curJob = game.JobId
+		local found = false
+		for _, srv in ipairs(res.data) do
+			if not Toggles.ServerHop.Value or UI_Unloaded then
+				break
+			end
+			if not forced and not CanHop() then
+				break
+			end
+			if srv.id and srv.id ~= curJob and srv.playing == 2 and not IsIgnored(srv.id) then
+				found = true
+				local id = srv.id
+				local count = srv.playing
+				AddIgnored(id, IGNORE_CANDIDATE)
+				Notify("📡 Teleporting", string.format("%d player | %s", count, id:sub(1, 8)))
+				task.wait(2)
+				if not DoTeleport(id) then
+					task.wait(TELEPORT_RETRY_WAIT)
+					continue
+				end
+				local result = WaitTeleport()
+				if result == "Success" then
+					ResetTeleportState()
+					IsHopping = false
+					return
+				elseif result == "Failed" then
+					ResetTeleportState()
+					task.wait(TELEPORT_RETRY_WAIT)
+					continue
+				else
+					local failId = TargetServer
+					if failId then
+						AddIgnored(failId, IGNORE_FAILED)
+						pcall(function()
+							SendDebug("🐛 Teleport Timeout", string.format("Server %s no response in %ds", failId, TELEPORT_TIMEOUT))
+						end)
+					end
+					Notify("⚠️ Timeout", "Server didn't respond, trying next")
+					ResetTeleportState()
+					task.wait(TELEPORT_RETRY_WAIT)
+				end
+			end
+		end
+		if not found then
+			local nextCursor = res.nextPageCursor or ""
+			if nextCursor ~= "" then
+				cursor = nextCursor
+				task.wait(PAGE_WAIT)
+			else
+				cursor = ""
+				Notify("⚠️ Server Hop", "No 1-3 player server available")
+				task.wait(NO_SERVER_WAIT)
+			end
+		end
+	end
+	ResetTeleportState()
+	IsHopping = false
+end
+
+local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
+local AutoExecuteQueued = false
+local function QueueAutoExec()
+	if AutoExecuteQueued or not Toggles.AutoExecute.Value then
+		return
+	end
+	if type(queue_on_teleport) ~= "function" then
+		Notify("Auto Execute", "queue_on_teleport not available", 5)
+		return
+	end
+	local code = string.format([[loadstring(game:HttpGet(%q))()]], LOADER_URL)
+	local ok, err = pcall(function()
+		queue_on_teleport(code)
+	end)
+	if ok then
+		AutoExecuteQueued = true
+		Notify("Auto Execute", "Queued for next teleport")
+	else
+		Notify("Auto Execute", "Failed: " .. tostring(err), 5)
+	end
+end
+
+-- [ PEMBUATAN UI MENGGUNAKAN MODERN V2 ] --
+
+local SectionFarm = TabAutoFarm:CreateSection("Auto Farm")
+
+TabAutoFarm:CreateToggle({
+	Name = "Enable Auto Farm",
+	CurrentValue = false,
+	Callback = function(Value)
+		Toggles.EnableAutoFarm.Value = Value
+	end,
 })
 
-demoSection:AddButton({
-    Name = "Show Dialog",
-    Icon = "lucide:message-square",
-    Callback = function()
-        Window:Dialog({
-            Title = "Dialog Example",
-            Content = "This is a dialog with buttons.",
-            Buttons = {
-                { Text = "OK", Primary = true, ReturnValue = true },
-                { Text = "Cancel", ReturnValue = false },
-            },
-            Callback = function(result)
-                print("Dialog result:", result)
-            end,
-        })
-    end,
+TabAutoFarm:CreateToggle({
+	Name = "Server Hop",
+	CurrentValue = false,
+	Callback = function(Value)
+		Toggles.ServerHop.Value = Value
+		if Value then
+			task.spawn(ServerHop)
+		end
+	end,
 })
 
-demoSection:AddButton({
-    Name = "Show Input Dialog",
-    Icon = "lucide:pen-line",
-    Callback = function()
-        Window:InputDialog({
-            Title = "Input Dialog",
-            Content = "Enter your name:",
-            Inputs = {
-                {
-                    Name = "Name",
-                    Placeholder = "Your name",
-                    Default = "Player",
-                },
-            },
-            Callback = function(values)
-                print("Input result:", values.Name)
-                Window:Notify({
-                    Title = "Hello",
-                    Content = "Hello, " .. values.Name,
-                    Duration = 3,
-                })
-            end,
-        })
-    end,
+TabAutoFarm:CreateToggle({
+	Name = "Auto Execute",
+	CurrentValue = false,
+	Callback = function(Value)
+		Toggles.AutoExecute.Value = Value
+		if Value then
+			QueueAutoExec()
+		else
+			AutoExecuteQueued = false
+		end
+	end,
 })
 
--- ============================================================
---  SCRIPT SELESAI
--- ============================================================
-print("ModernV2 example script loaded successfully!")
+local SectionWebhook = TabAutoFarm:CreateSection("Webhook")
+
+TabAutoFarm:CreateToggle({
+	Name = "Enable Webhook",
+	CurrentValue = false,
+	Callback = function(Value)
+		Toggles.EnableWebhook.Value = Value
+	end,
+})
+
+TabAutoFarm:CreateInput({
+	Name = "Webhook Link",
+	PlaceholderText = "Enter webhook URL...",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(Text)
+		Options.WebhookLink.Value = Text
+	end,
+})
+
+TabAutoFarm:CreateButton({
+	Name = "Test Webhook",
+	Callback = function()
+		local ok, msg = SendWebhook("🔔 Webhook Test", "Test from VD Auto Farm!", true)
+		if ok then
+			Notify("Webhook Success", "Test message sent!")
+		else
+			Notify("Webhook Failed", msg, 5)
+		end
+	end,
+})
+
+local SectionMenu = TabSettings:CreateSection("Menu Config")
+
+-- Disesuaikan jika ModernV2 support Unload
+TabSettings:CreateButton({
+	Name = "Unload UI",
+	Callback = function()
+		UI_Unloaded = true
+		if ModernV2 and ModernV2.Unload then
+			ModernV2:Unload()
+		else
+			Notify("System", "Unload command triggered")
+		end
+	end,
+})
+
+QueueAutoExec()
+
+-- Loop utama diubah untuk mengacu ke UI_Unloaded
+task.spawn(function()
+	while not UI_Unloaded do
+		pcall(BeatGame)
+		task.wait(1)
+	end
+end)
