@@ -1,14 +1,39 @@
 -- ================================================================
 -- VD AUTO FARM - MIGRASI KE MODERNV2 (ZILUX)
--- Menggunakan library dari ziaanclient.vercel.app/zilux
+-- Dengan fallback URL dan error handling
 -- ================================================================
 
--- Load ModernV2 Library
-local ModernV2 = loadstring(game:HttpGet("https://ziaanclient.vercel.app/zilux"))()
-if not ModernV2 then
-    error("Gagal memuat ModernV2 library. Periksa URL atau koneksi.")
+local function LoadModernV2()
+    local urls = {
+        "https://ziaanclient.vercel.app/zilux",
+        "https://ziaanclient.vercel.app/zilux.lua",
+        -- Tambahkan URL alternatif jika diperlukan
+    }
+    
+    for _, url in ipairs(urls) do
+        local success, result = pcall(function()
+            local response = game:HttpGet(url)
+            if not response or response == "" then
+                return nil, "Response kosong"
+            end
+            local fn, err = loadstring(response)
+            if not fn then
+                return nil, "Loadstring error: " .. tostring(err)
+            end
+            return fn()
+        end)
+        
+        if success and type(result) == "table" and result.CreateWindow then
+            return result
+        end
+    end
+    
+    error("Gagal memuat ModernV2 dari semua URL. Pastikan koneksi internet dan URL tersedia.")
 end
 
+local ModernV2 = LoadModernV2()
+
+-- Matikan error prompt
 pcall(function()
     game:GetService("GuiService"):SetErrorPromptEnabled(false)
 end)
@@ -25,11 +50,11 @@ local LocalPlayer = Players.LocalPlayer
 -- 1. BUAT WINDOW
 -- ================================================================
 local Window = ModernV2:CreateWindow({
-    Name = "",                              -- Title (kosong)
+    Name = "",                              -- Title
     Content = "version: 1.0.0",             -- Footer
     Icon = "bot",
     Size = ModernV2.Scales.Default,
-    Keybind = "RightShift",                 -- Toggle menu
+    Keybind = "RightShift",
     ConfigFolder = "VD_AutoFarm_Configs",
     TextGradient = true,
 })
@@ -639,7 +664,7 @@ Toggles.ServerHop = AutoFarmGroup:AddToggle({
     end,
 })
 
-local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/dev/loader.lua"
+local LOADER_URL = "https://raw.githubusercontent.com/Rzor731/VD-AUTO-FARM/refs/heads/main/loader.lua"
 local AutoExecuteQueued = false
 
 local function QueueAutoExec()
@@ -709,7 +734,6 @@ local MenuGroup = Tabs.Settings:AddSection({
     Box = true,
 })
 
--- Corner Radius (mengakses UICorner langsung)
 MenuGroup:AddSlider({
     Name = "Corner Radius",
     Flag = "UICornerSlider",
@@ -763,7 +787,6 @@ ModernV2:AddTheme({
     Icon = Color3.fromRGB(255, 255, 255),
 })
 
--- Config otomatis via flag system, tidak perlu konfigurasi tambahan.
 QueueAutoExec()
 
 -- ================================================================
@@ -776,9 +799,4 @@ task.spawn(function()
     end
 end)
 
--- Tampilkan window
 Window.Signal:SetValue(true)
-
--- ================================================================
--- SELESAI
--- ================================================================
